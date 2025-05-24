@@ -461,16 +461,16 @@
             exitPlatform = null;
             generateBackgroundColors();
             
-            // Starting platform
+            // Reintroduced: Green starting platform (already present)
             platforms.push({
                 x: 20,
                 y: canvas.height * 0.1,
                 width: 100,
                 height: 20,
-                color1: '#006400',
-                color2: '#004d00',
+                color1: '#006400', // Dark Green
+                color2: '#004d00', // Even Darker Green
                 static: true,
-                type: 'normal'
+                type: 'normal' // Explicitly set as 'normal' type
             });
             
             const numDynamicPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
@@ -484,52 +484,55 @@
             let specialPlatformsToGenerate = [];
 
             if (level === 1) {
-                // No special platforms in Level 1, all will be 'normal'
+                // Only standard moving platforms in Level 1
+                // specialPlatformsToGenerate remains empty
             } else if (level >= 2 && level <= 4) {
-                // Introduce one new type sequentially
+                // Introduce one new type sequentially for levels 2, 3, 4
+                // Level 2: disappearing, Level 3: bouncy, Level 4: conveyor
                 const typeToIntroduce = SPECIAL_PLATFORM_TYPES[level - 2];
                 specialPlatformsToGenerate.push(typeToIntroduce);
             } else if (level >= 5) {
-                // Add two random special platforms
+                // Level 5 onwards: Add two random special platforms
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
             }
 
             // Generate dynamic platform configurations
             for (let i = 0; i < numDynamicPlatforms; i++) {
-                let currentType = 'normal';
-                let pColor1 = '#00008B';
+                let currentType = 'normal'; // Default to normal moving platform
+                let pColor1 = '#00008B'; // Dark Blue
                 let pColor2 = '#000066';
                 let platformSpeedFactor = (1.0 + Math.random() * 0.5);
                 let isStatic = false;
                 let direction = Math.random() > 0.5 ? 1 : -1;
 
-                // Assign special platform types to the first few platforms generated
-                if (i < specialPlatformsToGenerate.length) {
-                    currentType = specialPlatformsToGenerate[i];
+                // If there are special platforms to add AND we haven't added all of them yet for this level
+                if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3) { 
+                     // Instead of random, pick one from the list and remove it to ensure exact count
+                    currentType = specialPlatformsToGenerate.shift(); // Takes the first element
                     switch (currentType) {
                         case 'disappearing':
                             pColor1 = '#800080'; // Purple
                             pColor2 = '#4B0082';
-                            isStatic = false; // Disappearing can still move
+                            isStatic = false; 
                             break;
                         case 'bouncy':
                             pColor1 = '#32CD32'; // LimeGreen
                             pColor2 = '#228B22';
-                            isStatic = true;
-                            platformSpeedFactor = 0; // Bouncy platforms are static
+                            isStatic = true; // Bouncy platforms are typically static
+                            platformSpeedFactor = 0; 
                             break;
                         case 'conveyor':
                             pColor1 = '#A9A9A9'; // DarkGrey
                             pColor2 = '#696969';
                             isStatic = false;
-                            platformSpeedFactor = (1.0 + Math.random() * 0.5); // Conveyors have their own speed
+                            platformSpeedFactor = (1.0 + Math.random() * 0.5); 
                             break;
                     }
                 }
 
                 const width = 70 + Math.random() * 150;
-                const y = minY + (i + 1) * verticalGap; // Spread platforms evenly
+                const y = minY + (i + 1) * verticalGap; // Spread platforms evenly vertically
                 const x = Math.random() * (canvas.width - width);
 
                 dynamicPlatformConfigs.push({
@@ -543,11 +546,35 @@
                     direction,
                     speed: platformBaseSpeed * platformSpeedFactor,
                     type: currentType,
-                    originalColor1: pColor1, // Store original colors for disappearing platforms
+                    originalColor1: pColor1, 
                     originalColor2: pColor2,
-                    active: true, // For disappearing platforms
-                    timer: 0, // For disappearing platforms
-                    reappearTime: 120 // Frames to wait before reappearing
+                    active: true, 
+                    timer: 0, 
+                    reappearTime: 120 
+                });
+            }
+
+            // Add any remaining special platforms if they haven't been placed (e.g. if random wasn't picked for existing slots)
+            while(specialPlatformsToGenerate.length > 0) {
+                const currentType = specialPlatformsToGenerate.shift();
+                let pColor1 = '#00008B'; let pColor2 = '#000066';
+                let platformSpeedFactor = (1.0 + Math.random() * 0.5); let isStatic = false;
+                
+                switch (currentType) {
+                    case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
+                    case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
+                    case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; break;
+                }
+
+                const width = 70 + Math.random() * 150;
+                const y = minY + Math.random() * (maxY - minY); // Place it randomly within the range if not assigned to an existing slot
+                const x = Math.random() * (canvas.width - width);
+
+                dynamicPlatformConfigs.push({
+                    x, y, width, height: 15, color1: pColor1, color2: pColor2,
+                    static: isStatic, direction: Math.random() > 0.5 ? 1 : -1,
+                    speed: platformBaseSpeed * platformSpeedFactor, type: currentType,
+                    originalColor1: pColor1, originalColor2: pColor2, active: true, timer: 0, reappearTime: 120
                 });
             }
 
@@ -585,7 +612,7 @@
                     });
                 }
 
-                // Add power-up to some platforms (less frequent than enemies, and not on 'bouncy')
+                // Add power-up to some platforms (less frequent than enemies, and not on 'bouncy'/'disappearing')
                 if (Math.random() < 0.08 && platform.type !== 'bouncy' && platform.type !== 'disappearing') {
                     const puType = Math.random() < 0.5 ? 'invincible' : 'speed';
                     powerUps.push(new PowerUp(platform.x + platform.width / 2, platform.y - 20, puType));

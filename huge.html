@@ -461,16 +461,16 @@
             exitPlatform = null;
             generateBackgroundColors();
             
-            // Reintroduced: Green starting platform (already present)
+            // Green starting platform - adjusted Y to be higher in the corner
             platforms.push({
                 x: 20,
-                y: canvas.height * 0.1,
+                y: canvas.height * 0.05, // Adjusted to be visually closer to the top edge
                 width: 100,
                 height: 20,
-                color1: '#006400', // Dark Green
-                color2: '#004d00', // Even Darker Green
+                color1: '#006400', 
+                color2: '#004d00', 
                 static: true,
-                type: 'normal' // Explicitly set as 'normal' type
+                type: 'normal' 
             });
             
             const numDynamicPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
@@ -507,8 +507,9 @@
                 let direction = Math.random() > 0.5 ? 1 : -1;
 
                 // If there are special platforms to add AND we haven't added all of them yet for this level
+                // This logic ensures that if `specialPlatformsToGenerate` is not empty, we prioritize placing those.
+                // We also add a random chance so it's not always the very first platforms.
                 if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3) { 
-                     // Instead of random, pick one from the list and remove it to ensure exact count
                     currentType = specialPlatformsToGenerate.shift(); // Takes the first element
                     switch (currentType) {
                         case 'disappearing':
@@ -555,6 +556,8 @@
             }
 
             // Add any remaining special platforms if they haven't been placed (e.g. if random wasn't picked for existing slots)
+            // This loop ensures that if `specialPlatformsToGenerate` still has items after the main loop,
+            // they are definitively added to the platforms list.
             while(specialPlatformsToGenerate.length > 0) {
                 const currentType = specialPlatformsToGenerate.shift();
                 let pColor1 = '#00008B'; let pColor2 = '#000066';
@@ -929,8 +932,8 @@
             }
             if (allCollected && !exitPlatform) {
                 exitPlatform = {
-                    x: canvas.width - 120,
-                    y: canvas.height * 0.1,
+                    x: canvas.width - 120, // Right side
+                    y: canvas.height - 70, // Adjusted to be in the lower part (platform height + margin)
                     width: 100,
                     height: 20,
                     color1: '#006400',

@@ -11,76 +11,173 @@
             height: 100vh;
             background: #222;
             overflow: hidden;
-            font-family: Arial, sans-serif; /* Added for general text styling */
+            flex-direction: column; /* To stack canvas and buttons vertically */
         }
         canvas {
             border: 2px solid #333;
-            display: block; /* Ensures canvas doesn't have extra space below it */
+            background: #000; /* Fallback for transparency issues if any */
         }
-        .controls {
+        #controls {
             position: absolute;
             top: 10px;
             right: 10px;
             display: flex;
             flex-direction: column;
-            gap: 5px; /* Space between buttons */
-            z-index: 10; /* Ensure buttons are above canvas if overlapping */
+            gap: 8px; /* Space between buttons */
         }
-        .controls button {
+        .control-button {
             padding: 5px 10px;
             background: linear-gradient(to bottom, #ff6b6b, #c44d4d);
             border: 2px solid black;
             border-radius: 5px;
             color: white;
             cursor: pointer;
+            font-family: sans-serif; /* Consistent font */
             font-size: 14px;
             white-space: nowrap; /* Prevent text wrapping */
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); /* Subtle shadow */
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5); /* Text shadow for buttons */
         }
-        .controls button:hover {
-            opacity: 0.9;
+        .control-button:hover {
+            background: linear-gradient(to bottom, #ff4e4e, #a93c3c);
         }
-        .controls button:active {
-            transform: translateY(1px);
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        .control-button:active {
+            background: linear-gradient(to bottom, #c44d4d, #ff6b6b);
         }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
-    <div class="controls">
-        <button id="restart">Restart</button>
-        <button id="muteButton">Mute</button>
+    <div id="controls">
+        <button id="restart" class="control-button">Restart Game</button>
+        <button id="mute-button" class="control-button">Mute Music</button>
     </div>
+    <canvas id="gameCanvas"></canvas>
+    
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const restartButton = document.getElementById('restart');
-        const muteButton = document.getElementById('muteButton');
         
-        // --- Canvas Size (Full height, 40% width) ---
+        // --- Canvas Size ---
+        // Use full height and 40% of the width
         canvas.width = window.innerWidth * 0.4;
         canvas.height = window.innerHeight;
         
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth * 0.4;
             canvas.height = window.innerHeight;
-            // Re-draw immediately after resize to avoid temporary blank screen
-            draw(); 
+            // Re-draw immediately to avoid visual glitches
+            draw();
         });
         
         const keys = {};
-        window.addEventListener('keydown', e => {
-            keys[e.key] = true;
-            // For audio context initialization on first user interaction
-            if (!audioCtxInitialized) {
-                initAudioContext();
-            }
-        });
+        window.addEventListener('keydown', e => keys[e.key] = true);
         window.addEventListener('keyup', e => keys[e.key] = false);
-        restartButton.addEventListener('click', resetGame);
         
+        document.getElementById('restart').addEventListener('click', resetGame);
+        
+        // --- Audio Setup ---
+        let audioContext;
+        let bgMusic;
+        let isMuted = false;
+        
+        // Function to create a simple oscillator sound effect
+        function createOscillatorSound(frequency, duration, type = 'sine', startTime = 0) {
+            if (isMuted) return; // Don't play if muted
+            if (!audioContext) {
+                // Lazily create AudioContext on first user interaction
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            // Use current time from audioContext for precise timing
+            const actualStartTime = startTime === 0 ? audioContext.currentTime : audioContext.currentTime + startTime;
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, actualStartTime);
+            
+            gainNode.gain.setValueAtTime(0.5, actualStartTime); // Max volume
+            gainNode.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration); // Fade out
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start(actualStartTime);
+            oscillator.stop(actualStartTime + duration);
+        }
+
+        // Specific sound effects functions
+        function playJumpSound() {
+            createOscillatorSound(600, 0.1, 'triangle');
+        }
+        
+        function playLandSound() {
+            createOscillatorSound(200, 0.08, 'square');
+        }
+
+        function playStarSound() {
+            createOscillatorSound(800, 0.05, 'sine');
+            createOscillatorSound(1000, 0.05, 'sine', 0.05); // Play second tone slightly after first
+        }
+
+        function playEnemyHitSound() {
+            createOscillatorSound(80, 0.2, 'sawtooth');
+            createOscillatorSound(40, 0.2, 'triangle'); // Deeper sound for impact
+        }
+
+        function playLifeLostSound() {
+            createOscillatorSound(150, 0.3, 'sawtooth');
+            createOscillatorSound(75, 0.3, 'triangle', 0.05); // Falling sound
+        }
+
+        function playLevelCompleteSound() {
+            createOscillatorSound(600, 0.1, 'triangle');
+            createOscillatorSound(800, 0.1, 'triangle', 0.1);
+            createOscillatorSound(1000, 0.1, 'triangle', 0.2);
+        }
+
+        function playGameOverSound() {
+            createOscillatorSound(200, 0.4, 'sine');
+            createOscillatorSound(100, 0.5, 'sine', 0.2);
+        }
+        
+        // Background Music Controls
+        const muteButton = document.getElementById('mute-button');
+        muteButton.addEventListener('click', toggleMute);
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            if (bgMusic) {
+                bgMusic.muted = isMuted;
+            }
+            muteButton.textContent = isMuted ? 'Unmute Music' : 'Mute Music';
+            // If unmuting, try to play music if it was paused
+            if (!isMuted && bgMusic && bgMusic.paused) {
+                bgMusic.play().catch(e => console.error("Music autoplay failed after unmuting:", e));
+            }
+        }
+        
+        // Function to start music (called after first user interaction)
+        function startMusic() {
+            if (!bgMusic) {
+                bgMusic = new Audio('https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Cycling%20Platforms.mp3');
+                bgMusic.loop = true;
+                bgMusic.volume = 0.3; // Adjust volume as needed
+            }
+            bgMusic.muted = isMuted; // Ensure initial mute state is applied
+            if (!isMuted && bgMusic.paused) {
+                bgMusic.play().catch(e => console.error("Music autoplay failed:", e));
+            }
+        }
+
+        // Listener for the first user interaction to enable audio
+        document.body.addEventListener('click', () => {
+            if (!audioContext) { // Initialize AudioContext if not already
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            startMusic();
+        }, { once: true }); // Ensure it runs only once
+        
+        // --- Game State Variables ---
         let player = {
             x: 50,
             y: 50,
@@ -90,8 +187,8 @@
             onGround: false,
             lives: 3,
             scale: 1,
-            justHitPlatform: false, // To prevent multiple bounce sounds on same platform
-            invulnerable: false // For enemy collision cooldown
+            canTakeDamage: true, // Cooldown flag for damage
+            damageCooldownTimeout: null // To store the timeout ID
         };
         
         let platforms = [];
@@ -100,144 +197,10 @@
         let exitPlatform = null;
         let score = 0;
         let level = 1;
-        let gameState = 'playing';
-        let platformSpeed = 0.6; // Slightly faster platforms
+        let gameState = 'playing'; // 'playing', 'levelComplete', 'gameOver'
+        let platformBaseSpeed = 0.7; // Slightly faster base speed
         let backgroundColors = [];
-
-        // --- Audio Setup ---
-        let audioCtx;
-        let masterGainNode;
-        let backgroundMusic;
-        let isMuted = false;
-        let audioCtxInitialized = false;
-
-        function initAudioContext() {
-            if (audioCtxInitialized) return; // Prevent re-initialization
-
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            masterGainNode = audioCtx.createGain();
-            masterGainNode.connect(audioCtx.destination);
-            masterGainNode.gain.value = isMuted ? 0 : 1; // Set initial volume based on mute state
-
-            // Load and play background music
-            backgroundMusic = new Audio('https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Sip%20of%20Comfort.mp3');
-            backgroundMusic.loop = true;
-            backgroundMusic.volume = 0.5; // Adjust music volume relative to master gain
-            backgroundMusic.muted = isMuted; // Ensure music starts muted if button says so
-            
-            // To ensure music plays after user interaction (required by browsers)
-            const playMusicOnce = () => {
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-                backgroundMusic.play().catch(e => console.warn("Music play failed:", e));
-                document.removeEventListener('click', playMusicOnce);
-                document.removeEventListener('keydown', playMusicOnce);
-            };
-            document.addEventListener('click', playMusicOnce, { once: true });
-            document.addEventListener('keydown', playMusicOnce, { once: true });
-
-            audioCtxInitialized = true;
-        }
-
-        muteButton.addEventListener('click', () => {
-            isMuted = !isMuted;
-            muteButton.textContent = isMuted ? 'Unmute' : 'Mute';
-            if (audioCtxInitialized) {
-                masterGainNode.gain.value = isMuted ? 0 : 1;
-            }
-            if (backgroundMusic) {
-                backgroundMusic.muted = isMuted; // Control HTMLAudioElement directly
-            }
-        });
-
-        // --- Coded Sound Effects ---
-        function playSound(type, options = {}) {
-            if (!audioCtxInitialized || isMuted) return; // Don't play if muted or context not ready
-
-            const {
-                frequency = 440, // Base frequency
-                duration = 0.1, // Duration in seconds
-                oscType = 'sine', // Oscillator type: 'sine', 'square', 'sawtooth', 'triangle'
-                volume = 0.5, // Max volume (0 to 1)
-                attack = 0.01, // Attack time
-                decay = 0.05, // Decay time
-                endFrequency // For pitch bends
-            } = options;
-
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-
-            oscillator.type = oscType;
-            oscillator.connect(gainNode);
-            gainNode.connect(masterGainNode); // Connect to the master gain node for global volume control
-
-            gainNode.gain.setValueAtTime(0, audioCtx.currentTime); // Start from 0 volume
-            gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + attack);
-            gainNode.gain.linearRampToValueAtTime(volume * 0.5, audioCtx.currentTime + attack + decay);
-
-
-            if (endFrequency) {
-                oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
-                oscillator.frequency.linearRampToValueAtTime(endFrequency, audioCtx.currentTime + duration);
-            } else {
-                oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
-            }
-
-            oscillator.start(audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-            oscillator.stop(audioCtx.currentTime + duration + 0.05); // Give a little extra time for fade out
-        }
-
-        function playJumpSound() {
-            playSound('jump', { frequency: 600, duration: 0.1, oscType: 'triangle', volume: 0.7 });
-        }
-
-        function playCollectStarSound() {
-            // Ascending arpeggio
-            playSound('star_note1', { frequency: 800, duration: 0.05, oscType: 'sine', volume: 0.6 });
-            setTimeout(() => playSound('star_note2', { frequency: 1000, duration: 0.05, oscType: 'sine', volume: 0.6 }), 50);
-            setTimeout(() => playSound('star_note3', { frequency: 1200, duration: 0.05, oscType: 'sine', volume: 0.6 }), 100);
-        }
-
-        function playPlayerDieSound() {
-            // Descending, slightly noisy sound
-            playSound('die', { frequency: 200, endFrequency: 50, duration: 0.3, oscType: 'square', volume: 0.8 });
-            // Add a short burst of noise for impact
-            const bufferSize = audioCtx.sampleRate * 0.1; // 0.1 second of noise
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const output = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                output[i] = Math.random() * 2 - 1; // White noise
-            }
-            const noiseSource = audioCtx.createBufferSource();
-            noiseSource.buffer = buffer;
-            const noiseGain = audioCtx.createGain();
-            noiseGain.gain.setValueAtTime(0.5, audioCtx.currentTime); // Initial volume for noise
-            noiseGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1); // Fade out noise quickly
-            noiseSource.connect(noiseGain);
-            noiseGain.connect(masterGainNode);
-            noiseSource.start();
-        }
-
-        function playLevelCompleteSound() {
-            // Triumphant ascending arpeggio
-            playSound('complete_note1', { frequency: 700, duration: 0.1, oscType: 'triangle', volume: 0.6 });
-            setTimeout(() => playSound('complete_note2', { frequency: 900, duration: 0.1, oscType: 'triangle', volume: 0.6 }), 100);
-            setTimeout(() => playSound('complete_note3', { frequency: 1200, duration: 0.2, oscType: 'sine', volume: 0.7 }), 200);
-        }
-
-        function playGameOverSound() {
-            // Somber descending notes
-            playSound('gameover_note1', { frequency: 300, duration: 0.2, oscType: 'sawtooth', volume: 0.8 });
-            setTimeout(() => playSound('gameover_note2', { frequency: 200, duration: 0.3, oscType: 'square', volume: 0.8 }), 200);
-            setTimeout(() => playSound('gameover_note3', { frequency: 100, duration: 0.4, oscType: 'sine', volume: 0.8 }), 500);
-        }
-
-        function playPlatformBounceSound() {
-            playSound('bounce', { frequency: 220, duration: 0.08, oscType: 'square', volume: 0.4, endFrequency: 180 });
-        }
-
+        
         function generateBackgroundColors() {
             backgroundColors = [];
             switch (level % 5) {
@@ -284,7 +247,7 @@
         function drawRectWithGradient(x, y, width, height, color1, color2) {
             const centerX = x + width / 2;
             const centerY = y + height / 2;
-            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(width, height) / 2);
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, width / 2);
             gradient.addColorStop(0, color1);
             gradient.addColorStop(1, color2);
             ctx.fillStyle = gradient;
@@ -324,13 +287,13 @@
             
             for (let i = 0; i < spikes; i++) {
                 rot += step;
-                let x_inner = cx + Math.cos(rot) * radius * scale * 0.4;
-                let y_inner = cy + Math.sin(rot) * radius * scale * 0.4;
-                ctx.lineTo(x_inner, y_inner);
+                let x = cx + Math.cos(rot) * radius * scale * 0.4;
+                let y = cy + Math.sin(rot) * radius * scale * 0.4;
+                ctx.lineTo(x, y);
                 rot += step;
-                let x_outer = cx + Math.cos(rot) * radius * scale;
-                let y_outer = cy + Math.sin(rot) * radius * scale;
-                ctx.lineTo(x_outer, y_outer);
+                x = cx + Math.cos(rot) * radius * scale;
+                y = cy + Math.sin(rot) * radius * scale;
+                ctx.lineTo(x, y);
             }
             ctx.closePath();
             
@@ -343,18 +306,6 @@
             ctx.lineWidth = 2;
             ctx.stroke();
         }
-
-        // --- Draw Text with Outline ---
-        function drawTextWithOutline(text, x, y, font, fillColor, outlineColor, outlineWidth, textAlign = 'center') {
-            ctx.font = font;
-            ctx.textAlign = textAlign;
-            ctx.lineWidth = outlineWidth;
-            ctx.strokeStyle = outlineColor;
-            ctx.fillStyle = fillColor;
-
-            ctx.strokeText(text, x, y);
-            ctx.fillText(text, x, y);
-        }
         
         function initLevel() {
             platforms = [];
@@ -366,7 +317,7 @@
             // Starting platform
             platforms.push({
                 x: 20,
-                y: 80,
+                y: canvas.height * 0.1, // Start platform near top, adjusted for full height
                 width: 100,
                 height: 20,
                 color1: '#006400',
@@ -375,9 +326,9 @@
             });
             
             // Moving platforms
-            const numPlatforms = 8 + Math.floor(Math.random() * 4);
+            const numPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5); // More platforms on higher levels
             const maxY = canvas.height * 0.9;
-            const minY = 120;
+            const minY = canvas.height * 0.15; // Adjusted start Y for platforms
             const stepY = (maxY - minY) / numPlatforms;
             
             for (let i = 0; i < numPlatforms; i++) {
@@ -395,21 +346,21 @@
                     color2: '#000066',
                     static: false,
                     direction,
-                    speed: platformSpeed * (0.8 + Math.random() * 0.4)
+                    speed: platformBaseSpeed * (1.0 + Math.random() * 0.5) // Platforms move faster, individual speeds
                 });
                 
                 // Add enemy to some platforms
-                if (Math.random() < 0.3) {
+                if (Math.random() < 0.3 + (level * 0.05)) { // Increased chance for enemies on higher levels
                     enemies.push({
                         x: x + width / 2,
-                        y: y - 15, // Initial dummy value, updated in updateEnemies
+                        y: y - 15,
                         size: 12,
                         platformIndex: platforms.length - 1
                     });
                 }
             }
             
-            // Red gutter platform
+            // Red gutter platform at the very bottom
             platforms.push({
                 x: 0,
                 y: canvas.height - 20,
@@ -434,22 +385,21 @@
                     starY = 20 + Math.random() * (maxStarY - 40);
                     valid = true;
                     
-                    // Check if star is not on top of an enemy or other stars
+                    // Check if star is not on top of an enemy
                     for (const enemy of enemies) {
                         const dx = starX - enemy.x;
                         const dy = starY - enemy.y;
                         const distance = Math.sqrt(dx * dx + dy * dy);
-                        if (distance < 30) { // Check collision with enemies
+                        if (distance < 30) {
                             valid = false;
                             break;
                         }
                     }
-                    if (valid) {
-                        for (const existingStar of stars) {
-                            const dx = starX - existingStar.x;
-                            const dy = starY - existingStar.y;
-                            const distance = Math.sqrt(dx * dx + dy * dy);
-                            if (distance < 40) { // Give some space between stars
+                     // Check if star is not on top of a platform
+                    if (valid) { // Only check platforms if not already invalid by enemy
+                        for (const platform of platforms) {
+                            if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
+                                starY + 10 > platform.y && starY - 10 < platform.y + platform.height) {
                                 valid = false;
                                 break;
                             }
@@ -468,12 +418,13 @@
             
             // Reset player position
             player.x = 50;
-            player.y = 50;
+            player.y = platforms[0].y - player.radius - 5; // Position player on the starting platform
             player.vx = 0;
             player.vy = 0;
             player.scale = 1;
-            player.justHitPlatform = false; // Reset bounce flag
-            player.invulnerable = false; // Reset invulnerability
+            player.onGround = false;
+            player.canTakeDamage = true; // Reset damage cooldown
+            clearTimeout(player.damageCooldownTimeout); // Clear any pending timeout
         }
         
         function update() {
@@ -485,31 +436,26 @@
                 checkExitPlatform();
             } else if (gameState === 'levelComplete' && keys[' ']) {
                 level++;
-                platformSpeed += 0.1;
+                platformBaseSpeed += 0.05; // Slightly increase base speed for next level
                 gameState = 'playing';
                 initLevel();
-                // Sound for continuing to next level (optional, already played when reaching exit)
-                // playLevelCompleteSound(); 
             } else if (gameState === 'gameOver' && keys[' ']) {
                 resetGame();
-                // Sound for restarting game (optional, already played when lives run out)
-                // playGameOverSound(); 
             }
         }
         
         function updatePlayer() {
             // Horizontal movement
-            if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.2, -3);
-            else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.2, 3);
+            if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.2, -4); // Slightly faster horizontal
+            else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.2, 4); // Slightly faster horizontal
             else player.vx *= 0.9;
             
             player.x += player.vx;
             
-            // Jumping (Slightly higher jumps)
+            // Jumping
             if (keys[' '] && player.onGround) {
-                player.vy = -8.5; // Increased jump height
+                player.vy = -9; // Jumps are slightly higher
                 player.onGround = false;
-                player.justHitPlatform = false; // Reset to allow next bounce sound on new landing
                 playJumpSound();
             }
             
@@ -528,30 +474,34 @@
             }
             
             // Platform collision
-            let wasOnGround = player.onGround; // Store previous onGround state
-            player.onGround = false; // Assume not on ground initially
+            let landedOnPlatformThisFrame = false;
             for (const platform of platforms) {
-                // Check for general overlap
-                if (player.y + player.radius > platform.y && 
-                    player.y - player.radius < platform.y + platform.height &&
+                // Check if player is falling and will land on platform
+                if (player.vy > 0 && 
+                    player.y + player.radius > platform.y && 
+                    player.y - player.radius < platform.y + platform.height && // check Y overlap
                     player.x + player.radius > platform.x && 
                     player.x - player.radius < platform.x + platform.width) {
                     
-                    // Top collision (landing on platform)
-                    if (player.vy >= 0 && player.y <= platform.y + player.radius) { // Check if falling onto it or exactly on top
-                        player.y = platform.y - player.radius; // Position player on top
-                        player.vy = -player.vy * 0.2; // Small bounce effect
-                        player.onGround = true;
-
-                        // Play bounce sound only if just landed and not already bouncing on this platform
-                        if (!wasOnGround && !player.justHitPlatform) {
-                           playPlatformBounceSound();
-                           player.justHitPlatform = true; // Mark that player just bounced on a platform
+                    // If player's bottom edge was above platform's top edge in previous frame
+                    // and player is now colliding, it means landing.
+                    if (player.y - player.vy + player.radius <= platform.y) { 
+                        player.y = platform.y - player.radius; // Snap to top of platform
+                        
+                        if (!player.onGround) { // Only apply bounce and play sound if just landed
+                             player.vy = -player.vy * 0.2; // Small bounce
+                             playLandSound();
+                        } else {
+                            player.vy = 0; // Prevent multiple bounces if already on ground
                         }
+                        player.onGround = true;
+                        landedOnPlatformThisFrame = true;
                         
                         // Squeeze animation
-                        player.scale = 0.9;
-                        setTimeout(() => player.scale = 1, 100);
+                        if (player.scale === 1) { // Only animate if not already squished
+                            player.scale = 0.9;
+                            setTimeout(() => player.scale = 1, 100);
+                        }
                         
                         // Move with platform
                         if (!platform.static) {
@@ -559,42 +509,35 @@
                         }
                         
                         // Check if deadly platform
-                        if (platform.deadly) {
-                            playerDie();
+                        if (platform.deadly && player.canTakeDamage) {
+                            playerDie(true); // Indicate death by deadly platform
                         }
-                    } 
-                    // Bottom collision (hitting head on platform)
-                    else if (player.vy < 0 && player.y - player.radius < platform.y + platform.height && player.y > platform.y) {
-                        player.y = platform.y + platform.height + player.radius; // Push player below platform
-                        player.vy = 0; // Stop upward movement
                     }
                 }
             }
-            // If the player is no longer detected as onGround, reset the justHitPlatform flag
-            // This ensures the bounce sound can play again when landing on a *new* platform or re-landing
-            if (!player.onGround) {
-                player.justHitPlatform = false;
+            // If player didn't land on any platform this frame, they are in the air
+            if (!landedOnPlatformThisFrame && player.onGround && player.vy > 0) {
+                 player.onGround = false;
             }
 
+
             // Enemy collision
-            // Only check for collisions if player is not invulnerable
-            if (!player.invulnerable) {
-                for (const enemy of enemies) {
-                    const dx = player.x - enemy.x;
-                    const dy = player.y - enemy.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (distance < player.radius + enemy.size * 0.8) { // 0.8 factor for a slightly more forgiving hitbox
-                        playerDie();
-                        // Invulnerability is set inside playerDie()
-                        break; // Only register one hit per invulnerability period
-                    }
+            for (const enemy of enemies) {
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < player.radius + enemy.size * 0.7 && player.canTakeDamage) { // Reduced enemy hit radius
+                    playerDie(false); // Indicate death by enemy
+                    playEnemyHitSound();
                 }
             }
             
-            // Fall off screen (deadly area beyond the red gutter)
-            if (player.y > canvas.height + 50) {
-                playerDie();
+            // Fall off screen (below the red gutter platform)
+            if (player.y > canvas.height + 50) { // Give a little buffer
+                if (player.canTakeDamage) { // Prevent multiple life losses if already falling
+                    playerDie(true); // Indicate death by fall
+                }
             }
         }
         
@@ -607,6 +550,9 @@
                     // Reverse direction at edges
                     if (platform.x <= 0 || platform.x + platform.width >= canvas.width) {
                         platform.direction *= -1;
+                        // Nudge back into bounds if it overshot
+                        if (platform.x < 0) platform.x = 0;
+                        if (platform.x + platform.width > canvas.width) platform.x = canvas.width - platform.width;
                     }
                 }
             }
@@ -615,9 +561,9 @@
         function updateEnemies() {
             for (const enemy of enemies) {
                 const platform = platforms[enemy.platformIndex];
-                // Enemy follows platform's X, but stays above it
+                // Enemies stick to the center of their platform
                 enemy.x = platform.x + platform.width / 2;
-                enemy.y = platform.y - enemy.size * 1.5; // Position above platform, adjusted for size
+                enemy.y = platform.y - enemy.size - 2; // Position slightly above platform
             }
         }
         
@@ -637,10 +583,12 @@
                     if (distance < player.radius + star.radius * star.scale * 0.7) {
                         star.collected = true;
                         score += 1;
-                        playCollectStarSound();
+                        playStarSound();
                         
-                        // Animate star collection (shrinking effect)
+                        // Animate star collection
+                        // Using a self-calling anonymous function to capture starIndex and scaleValue
                         (function animateStar(starIndex, scaleValue) {
+                            if (stars[starIndex] && !stars[starIndex].collected) return; // Stop if star is somehow collected twice
                             stars[starIndex].scale = scaleValue;
                             if (scaleValue > 0.1) {
                                 requestAnimationFrame(() => animateStar(starIndex, scaleValue - 0.1));
@@ -650,11 +598,11 @@
                 }
             }
             
+            // Only create exit platform if all stars are collected AND there isn't one already
             if (allCollected && !exitPlatform) {
-                // If all stars are collected, spawn the exit platform
                 exitPlatform = {
                     x: canvas.width - 120,
-                    y: canvas.height - 80,
+                    y: canvas.height * 0.1, // Exit platform near top, adjusted for full height
                     width: 100,
                     height: 20,
                     color1: '#006400',
@@ -664,32 +612,39 @@
             }
         }
         
-        function playerDie() {
-            // Ensure only one life is subtracted per hit, and player is temporarily invulnerable
-            if (player.invulnerable) return; // Already hit and in invulnerable state
+        // isFallOrDeadlyPlatform: true if died from fall/deadly platform, false if by enemy
+        function playerDie(isFallOrDeadlyPlatform) {
+            if (!player.canTakeDamage) return; // Prevent multiple deaths from one hit/fall
             
             player.lives--;
-            playPlayerDieSound();
-            player.invulnerable = true; // Set invulnerability
-            setTimeout(() => { player.invulnerable = false; }, 1000); // Remove invulnerability after 1 second
-
+            player.canTakeDamage = false; // Disable damage for a duration
+            clearTimeout(player.damageCooldownTimeout); // Clear previous timeout if any
+            player.damageCooldownTimeout = setTimeout(() => {
+                player.canTakeDamage = true;
+            }, 1000); // 1-second invulnerability
+            
             if (player.lives <= 0) {
                 gameState = 'gameOver';
-                playGameOverSound(); // Play game over sound when lives run out
+                playGameOverSound();
             } else {
-                // Animate player shrinking on hit/death
+                if (isFallOrDeadlyPlatform) {
+                    playLifeLostSound(); // Specific sound for falling/deadly platform
+                } 
+                // Enemy hit sound is played in updatePlayer directly when collision occurs
+                
+                // Animate player shrinking
                 (function animatePlayerDeath(scale) {
                     player.scale = scale;
                     if (scale > 0.1) {
                         requestAnimationFrame(() => animatePlayerDeath(scale - 0.1));
                     } else {
-                        // Reset player position and state after animation
+                        // Reset player after animation completes
                         player.x = 50;
-                        player.y = 50;
+                        player.y = platforms[0].y - player.radius - 5; // Reset to starting platform
                         player.vx = 0;
                         player.vy = 0;
                         player.scale = 1;
-                        player.justHitPlatform = false; // Reset bounce flag for new start
+                        player.onGround = false;
                     }
                 })(1);
             }
@@ -702,11 +657,10 @@
                     player.x + player.radius > exitPlatform.x && 
                     player.x - player.radius < exitPlatform.x + exitPlatform.width) {
                     
-                    // Only transition to level complete once
-                    if (gameState !== 'levelComplete') {
+                    if (gameState !== 'levelComplete') { // Prevent re-triggering sound/score if already complete
                         gameState = 'levelComplete';
                         score += 5; // 5 points for completing level
-                        playLevelCompleteSound(); // Play sound when reaching exit
+                        playLevelCompleteSound();
                     }
                 }
             }
@@ -724,8 +678,14 @@
             if (exitPlatform) {
                 drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
                 
-                // Draw EXIT text with outline
-                drawTextWithOutline('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 5, 'bold 16px Arial', 'yellow', 'black', 3);
+                // Text for exit platform with outline
+                ctx.fillStyle = 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.strokeText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
+                ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
             }
             
             // Draw stars
@@ -743,18 +703,44 @@
             // Draw player
             drawCircleWithGradient(player.x, player.y, player.radius, '#FFFFFF', '#87CEEB', player.scale);
             
-            // Draw UI (Text with outline)
-            drawTextWithOutline(`Score: ${score}`, 10, 20, 'bold 16px Arial', 'white', 'black', 3, 'left');
-            drawTextWithOutline(`Level: ${level}`, 10, 40, 'bold 16px Arial', 'white', 'black', 3, 'left');
-            drawTextWithOutline(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 60, 'bold 16px Arial', 'white', 'black', 3, 'left');
+            // Draw UI (Score, Level, Lives) with outline
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 20px Arial'; // Slightly larger font for UI
+            ctx.textAlign = 'left';
+
+            ctx.strokeText(`Score: ${score}`, 10, 30);
+            ctx.fillText(`Score: ${score}`, 10, 30);
+
+            ctx.strokeText(`Level: ${level}`, 10, 60);
+            ctx.fillText(`Level: ${level}`, 10, 60);
+
+            ctx.strokeText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 90);
+            ctx.fillText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 90);
             
-            // Draw game state messages (Text with outline)
+            // Draw game state messages with outline
+            ctx.textAlign = 'center'; // Center text for messages
+            ctx.lineWidth = 4; // Thicker outline for messages
+
             if (gameState === 'levelComplete') {
-                drawTextWithOutline(`Get ready for level: ${level + 1}`, canvas.width / 2, canvas.height / 2, 'bold 24px Arial', 'white', 'black', 4);
-                drawTextWithOutline('Press SPACE to continue', canvas.width / 2, canvas.height / 2 + 30, 'bold 24px Arial', 'white', 'black', 4);
+                ctx.font = 'bold 30px Arial';
+                ctx.strokeText(`Get ready for level: ${level + 1}`, canvas.width / 2, canvas.height / 2);
+                ctx.fillText(`Get ready for level: ${level + 1}`, canvas.width / 2, canvas.height / 2);
+                ctx.strokeText('Press SPACE to continue', canvas.width / 2, canvas.height / 2 + 40);
+                ctx.fillText('Press SPACE to continue', canvas.width / 2, canvas.height / 2 + 40);
             } else if (gameState === 'gameOver') {
-                drawTextWithOutline('GAME OVER', canvas.width / 2, canvas.height / 2, 'bold 32px Arial', 'red', 'black', 5);
-                drawTextWithOutline('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 40, 'bold 32px Arial', 'red', 'black', 5);
+                ctx.font = 'bold 40px Arial';
+                ctx.strokeStyle = 'darkred'; // Different outline for game over
+                ctx.strokeText('GAME OVER', canvas.width / 2, canvas.height / 2);
+                ctx.fillStyle = 'red'; // Red fill for game over
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+                
+                ctx.font = 'bold 30px Arial';
+                ctx.strokeStyle = 'black';
+                ctx.fillStyle = 'white';
+                ctx.strokeText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
+                ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
             }
         }
         
@@ -762,9 +748,12 @@
             player.lives = 3;
             score = 0;
             level = 1;
-            platformSpeed = 0.6; // Reset to initial faster speed
+            platformBaseSpeed = 0.7; // Reset base speed
             gameState = 'playing';
+            player.canTakeDamage = true;
+            clearTimeout(player.damageCooldownTimeout); // Ensure damage cooldown is cleared
             initLevel();
+            startMusic(); // Ensure music restarts if it was stopped/paused
         }
         
         function gameLoop() {
@@ -773,7 +762,6 @@
             requestAnimationFrame(gameLoop);
         }
         
-        // Initial setup
         initLevel();
         gameLoop();
     </script>

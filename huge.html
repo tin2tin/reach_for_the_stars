@@ -24,6 +24,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px; /* Space between buttons */
+            z-index: 10; /* Ensure buttons are above canvas */
         }
         .control-button {
             padding: 5px 10px;
@@ -42,6 +43,66 @@
         .control-button:active {
             background: linear-gradient(to bottom, #c44d4d, #ff6b6b);
         }
+
+        /* --- Mobile Controls Styling --- */
+        #mobile-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            display: none; /* Hidden by default */
+            justify-content: space-between;
+            align-items: flex-end;
+            z-index: 10;
+        }
+
+        #mobile-controls .control-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        #mobile-controls button {
+            padding: 15px 25px;
+            background: linear-gradient(to bottom, #4CAF50, #2E8B57); /* Greenish for controls */
+            border: 2px solid black;
+            border-radius: 50%; /* Make them circular */
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            -webkit-user-select: none; /* Disable text selection for touch */
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            touch-action: manipulation; /* Prevent default browser touch actions */
+        }
+
+        #mobile-controls button:active {
+            background: linear-gradient(to bottom, #2E8B57, #4CAF50);
+            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5);
+        }
+
+        /* Only show mobile controls on smaller screens (e.g., typical mobile viewport) */
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: flex;
+            }
+            /* Adjust canvas size for mobile if necessary to prevent clipping, or ensure it fits */
+            body {
+                 flex-direction: column; /* Ensure vertical layout */
+                 justify-content: flex-start; /* Align canvas to top */
+            }
+            canvas {
+                max-width: 100%; /* Ensure canvas doesn't overflow */
+                max-height: calc(100vh - 120px); /* Leave space for controls/buttons */
+                margin-top: 10px; /* Small margin from top */
+            }
+            #controls {
+                top: 5px; /* Adjust top controls to be less intrusive */
+                right: 5px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -51,42 +112,68 @@
     </div>
     <canvas id="gameCanvas"></canvas>
     
+    <div id="mobile-controls">
+        <div class="control-group">
+            <button id="left-btn">←</button>
+            <button id="right-btn">→</button>
+        </div>
+        <button id="jump-btn">JUMP</button>
+    </div>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
         // --- Canvas Size ---
-        // Use full height and 40% of the width
         canvas.width = window.innerWidth * 0.4;
         canvas.height = window.innerHeight;
         
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth * 0.4;
             canvas.height = window.innerHeight;
-            // Re-draw immediately to avoid visual glitches
-            draw();
+            // Re-initialize level on resize to adjust player/platform positions
+            if (gameState !== 'start') { // Avoid re-init if game hasn't started
+                // Consider if a full re-init is desired or just redraw/recalculate positions
+                // For simplicity, let's just redraw. A full re-init might be too disruptive.
+                // If dynamic elements depend heavily on canvas size, a more robust resize handler is needed.
+                // For now, this primarily affects background and player boundaries.
+                // The start platform and player position will be relative to new size if re-initLevel() is called.
+                // However, calling initLevel() on every resize will reset the game state.
+                // So, we'll just let drawing handle it, but starting positions are set once.
+                // If the game is active, this might lead to player being off-center.
+                // A more advanced solution would reposition elements relative to new canvas size.
+                // For now, player start position is based on initial canvas.width.
+            }
+            draw(); // Redraw with new dimensions
         });
         
         const keys = {};
-        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            // Prevent default behavior for spacebar to avoid page scrolling
+            if (e.key === ' ') e.preventDefault(); 
+        });
         window.addEventListener('keyup', e => keys[e.key] = false);
         
-        document.getElementById('restart').addEventListener('click', resetGame);
+        document.getElementById('restart').addEventListener('click', () => {
+            if (gameState === 'gameOver' || confirm("Are you sure you want to restart? Your progress will be lost.")) {
+                resetGame();
+            }
+        });
         
         // --- Audio Setup ---
         let audioContext;
         let bgMusic;
         let isMuted = false;
         
-        // Function to create a simple oscillator sound effect
         function createOscillatorSound(frequency, duration, type = 'sine', startTime = 0) {
-            if (isMuted) return; // Don't play if muted
+            if (isMuted) return;
+            if (gameState !== 'playing' && gameState !== 'levelComplete' && gameState !== 'start') return; // Allow sounds on start for potential interactions
+            
             if (!audioContext) {
-                // Lazily create AudioContext on first user interaction
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
             
-            // Use current time from audioContext for precise timing
             const actualStartTime = startTime === 0 ? audioContext.currentTime : audioContext.currentTime + startTime;
 
             const oscillator = audioContext.createOscillator();
@@ -95,8 +182,8 @@
             oscillator.type = type;
             oscillator.frequency.setValueAtTime(frequency, actualStartTime);
             
-            gainNode.gain.setValueAtTime(0.5, actualStartTime); // Max volume
-            gainNode.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration); // Fade out
+            gainNode.gain.setValueAtTime(0.5, actualStartTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration);
             
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
@@ -105,42 +192,15 @@
             oscillator.stop(actualStartTime + duration);
         }
 
-        // Specific sound effects functions
-        function playJumpSound() {
-            createOscillatorSound(600, 0.1, 'triangle');
-        }
-        
-        function playLandSound() {
-            createOscillatorSound(200, 0.08, 'square');
-        }
+        function playJumpSound() { createOscillatorSound(600, 0.1, 'triangle'); emitParticles(player.x, player.y + player.radius, 'jump_puff'); }
+        function playLandSound() { createOscillatorSound(200, 0.08, 'square'); emitParticles(player.x, player.y + player.radius, 'dust'); }
+        function playStarSound() { createOscillatorSound(800, 0.05, 'sine'); createOscillatorSound(1000, 0.05, 'sine', 0.05); emitParticles(player.x, player.y, 'sparkle'); }
+        function playEnemyHitSound() { createOscillatorSound(80, 0.2, 'sawtooth'); createOscillatorSound(40, 0.2, 'triangle'); emitParticles(player.x, player.y, 'hit_splatter'); }
+        function playLifeLostSound() { createOscillatorSound(150, 0.3, 'sawtooth'); createOscillatorSound(75, 0.3, 'triangle', 0.05); }
+        function playLevelCompleteSound() { createOscillatorSound(600, 0.1, 'triangle'); createOscillatorSound(800, 0.1, 'triangle', 0.1); createOscillatorSound(1000, 0.1, 'triangle', 0.2); }
+        function playGameOverSound() { createOscillatorSound(200, 0.4, 'sine'); createOscillatorSound(100, 0.5, 'sine', 0.2); }
+        function playPowerUpSound() { createOscillatorSound(1200, 0.08, 'sine'); createOscillatorSound(1500, 0.08, 'sine', 0.03); }
 
-        function playStarSound() {
-            createOscillatorSound(800, 0.05, 'sine');
-            createOscillatorSound(1000, 0.05, 'sine', 0.05); // Play second tone slightly after first
-        }
-
-        function playEnemyHitSound() {
-            createOscillatorSound(80, 0.2, 'sawtooth');
-            createOscillatorSound(40, 0.2, 'triangle'); // Deeper sound for impact
-        }
-
-        function playLifeLostSound() {
-            createOscillatorSound(150, 0.3, 'sawtooth');
-            createOscillatorSound(75, 0.3, 'triangle', 0.05); // Falling sound
-        }
-
-        function playLevelCompleteSound() {
-            createOscillatorSound(600, 0.1, 'triangle');
-            createOscillatorSound(800, 0.1, 'triangle', 0.1);
-            createOscillatorSound(1000, 0.1, 'triangle', 0.2);
-        }
-
-        function playGameOverSound() {
-            createOscillatorSound(200, 0.4, 'sine');
-            createOscillatorSound(100, 0.5, 'sine', 0.2);
-        }
-        
-        // Background Music Controls
         const muteButton = document.getElementById('mute-button');
         muteButton.addEventListener('click', toggleMute);
 
@@ -150,87 +210,251 @@
                 bgMusic.muted = isMuted;
             }
             muteButton.textContent = isMuted ? 'Unmute Music' : 'Mute Music';
-            // If unmuting, try to play music if it was paused
-            if (!isMuted && bgMusic && bgMusic.paused) {
+            if (!isMuted && bgMusic && bgMusic.paused && gameState === 'playing') {
                 bgMusic.play().catch(e => console.error("Music autoplay failed after unmuting:", e));
+            } else if (isMuted && bgMusic && !bgMusic.paused) {
+                bgMusic.pause();
             }
         }
         
-        // Function to start music (called after first user interaction)
         function startMusic() {
             if (!bgMusic) {
                 bgMusic = new Audio('https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Cycling%20Platforms.mp3');
                 bgMusic.loop = true;
-                bgMusic.volume = 0.3; // Adjust volume as needed
+                bgMusic.volume = 0.3;
             }
-            bgMusic.muted = isMuted; // Ensure initial mute state is applied
+            bgMusic.muted = isMuted;
             if (!isMuted && bgMusic.paused) {
                 bgMusic.play().catch(e => console.error("Music autoplay failed:", e));
             }
         }
 
-        // Listener for the first user interaction to enable audio
         document.body.addEventListener('click', () => {
-            if (!audioContext) { // Initialize AudioContext if not already
+            if (!audioContext) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
             startMusic();
-        }, { once: true }); // Ensure it runs only once
+        }, { once: true });
+        
+        // --- Mobile Controls Event Listeners ---
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+        const jumpBtn = document.getElementById('jump-btn');
+
+        function setupTouchControl(btn, key) {
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent scrolling/zooming
+                keys[key] = true;
+            });
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys[key] = false;
+            });
+            // Also listen for mouse events on buttons for dev/testing on desktop
+            btn.addEventListener('mousedown', () => keys[key] = true);
+            btn.addEventListener('mouseup', () => keys[key] = false);
+            btn.addEventListener('mouseleave', () => keys[key] = false); // Important for mouse events
+        }
+
+        setupTouchControl(leftBtn, 'ArrowLeft');
+        setupTouchControl(rightBtn, 'ArrowRight');
+        setupTouchControl(jumpBtn, ' '); // Spacebar key
         
         // --- Game State Variables ---
         let player = {
-            x: 50,
-            y: 50,
+            x: canvas.width / 2, // Initialized here for reference, but set in initLevel
+            y: canvas.height - 150, // Initialized here for reference, but set in initLevel
             radius: 15,
             vx: 0,
             vy: 0,
             onGround: false,
             lives: 3,
             scale: 1,
-            canTakeDamage: true, // Cooldown flag for damage
-            damageCooldownTimeout: null // To store the timeout ID
+            canTakeDamage: true,
+            damageCooldownTimeout: null,
+            invincible: false, 
+            invincibleTimer: 0,
+            speedBoost: false, 
+            speedBoostTimer: 0,
+            baseSpeed: 4, 
+            baseJump: -9 
         };
         
         let platforms = [];
         let enemies = [];
         let stars = [];
+        let powerUps = []; 
+        let particles = []; 
         let exitPlatform = null;
         let score = 0;
         let level = 1;
-        let gameState = 'playing'; // 'playing', 'levelComplete', 'gameOver'
-        let platformBaseSpeed = 0.7; // Slightly faster base speed
+        let gameState = 'start';
+        let platformBaseSpeed = 0.7; 
         let backgroundColors = [];
+        let highScore = parseInt(localStorage.getItem('platformGameHighScore') || '0', 10);
+        let gameOverFinalScore = 0;
+
+        let transitionAlpha = 0;
+        let transitionSpeed = 0.03;
+        let transitionCallback = null;
+        let playerCanMove = false;
         
-        function generateBackgroundColors() {
-            backgroundColors = [];
-            switch (level % 5) {
-                case 1: // Night dawn
-                    backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c'];
-                    break;
-                case 2: // Morning
-                    backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];
-                    break;
-                case 3: // Afternoon
-                    backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6'];
-                    break;
-                case 4: // Evening
-                    backgroundColors = ['#ff9966', '#ff5e62', '#c84e89'];
-                    break;
-                case 0: // Night
-                    backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
-                    break;
+        const SPECIAL_PLATFORM_TYPES = ['disappearing', 'bouncy', 'conveyor'];
+
+        class Particle {
+            constructor(x, y, type, color, size, vx, vy, lifetime) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.color = color;
+                this.size = size;
+                this.vx = vx;
+                this.vy = vy;
+                this.alpha = 1;
+                this.lifetime = lifetime;
+                this.originalLifetime = lifetime;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.1; 
+                this.lifetime--;
+                this.alpha = this.lifetime / this.originalLifetime;
+                if (this.type === 'sparkle') {
+                    this.size *= 0.98; 
+                } else {
+                    this.size *= 0.95; 
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                if (this.type === 'sparkle') {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (this.type === 'dust' || this.type === 'jump_puff') {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (this.type === 'hit_splatter') {
+                    ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+                }
+                ctx.restore();
             }
         }
-        
-        function drawBackground() {
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            backgroundColors.forEach((color, index) => {
-                gradient.addColorStop(index / (backgroundColors.length - 1), color);
-            });
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        function emitParticles(x, y, type) {
+            let numParticles = 0;
+            let color = '';
+            let minSize = 0;
+            let maxSize = 0;
+            let minVx = -2;
+            let maxVx = 2;
+            let minVy = -3;
+            let maxVy = -1;
+            let lifetime = 30;
+
+            switch (type) {
+                case 'sparkle':
+                    numParticles = 5 + Math.random() * 5;
+                    color = 'yellow';
+                    minSize = 3; maxSize = 6;
+                    minVx = -2; maxVx = 2;
+                    minVy = -2; maxVy = 2; 
+                    lifetime = 40;
+                    break;
+                case 'dust':
+                    numParticles = 3 + Math.random() * 3;
+                    color = 'grey';
+                    minSize = 4; maxSize = 8;
+                    minVx = -1; maxVx = 1;
+                    minVy = -1; maxVy = -0.5;
+                    lifetime = 20;
+                    break;
+                case 'jump_puff':
+                    numParticles = 5 + Math.random() * 5;
+                    color = 'lightblue';
+                    minSize = 5; maxSize = 10;
+                    minVx = -1; maxVx = 1;
+                    minVy = 1; maxVy = 3; 
+                    lifetime = 25;
+                    break;
+                case 'hit_splatter':
+                    numParticles = 8 + Math.random() * 7;
+                    color = 'red';
+                    minSize = 4; maxSize = 10;
+                    minVx = -3; maxVx = 3;
+                    minVy = -4; maxVy = 0;
+                    lifetime = 30;
+                    break;
+            }
+
+            for (let i = 0; i < numParticles; i++) {
+                particles.push(new Particle(
+                    x + (Math.random() - 0.5) * 5,
+                    y + (Math.random() - 0.5) * 5,
+                    type,
+                    color,
+                    minSize + Math.random() * (maxSize - minSize),
+                    minVx + Math.random() * (maxVx - minVx),
+                    minVy + Math.random() * (maxVy - minVy),
+                    lifetime
+                ));
+            }
         }
-        
+
+        class PowerUp {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type; 
+                this.radius = 12;
+                this.collected = false;
+                this.scale = 1;
+                this.color1 = '';
+                this.color2 = '';
+                this.symbol = ''; 
+                this.animationTimer = 0; 
+                this.animationSpeed = 0.05;
+
+                switch (this.type) {
+                    case 'invincible':
+                        this.color1 = '#FFD700'; 
+                        this.color2 = '#FFA500'; 
+                        this.symbol = '✨';
+                        break;
+                    case 'speed':
+                        this.color1 = '#00FF00'; 
+                        this.color2 = '#008000'; 
+                        this.symbol = '⚡';
+                        break;
+                }
+            }
+
+            draw(ctx) {
+                if (this.collected) return;
+
+                const offsetY = Math.sin(this.animationTimer) * 5; 
+                drawCircleWithGradient(this.x, this.y + offsetY, this.radius, this.color1, this.color2, this.scale);
+
+                ctx.fillStyle = 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.font = 'bold 15px Arial';
+                ctx.textAlign = 'center';
+                ctx.strokeText(this.symbol, this.x, this.y + offsetY + 5);
+                ctx.fillText(this.symbol, this.x, this.y + offsetY + 5);
+            }
+
+            update() {
+                this.animationTimer += this.animationSpeed;
+            }
+        }
+
         function drawCircleWithGradient(x, y, radius, color1, color2, scale = 1) {
             ctx.beginPath();
             const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * scale);
@@ -247,7 +471,7 @@
         function drawRectWithGradient(x, y, width, height, color1, color2) {
             const centerX = x + width / 2;
             const centerY = y + height / 2;
-            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, width / 2);
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(width, height) / 1.5); // Adjusted gradient spread
             gradient.addColorStop(0, color1);
             gradient.addColorStop(1, color2);
             ctx.fillStyle = gradient;
@@ -287,13 +511,13 @@
             
             for (let i = 0; i < spikes; i++) {
                 rot += step;
-                let x = cx + Math.cos(rot) * radius * scale * 0.4;
-                let y = cy + Math.sin(rot) * radius * scale * 0.4;
-                ctx.lineTo(x, y);
+                let starTipX = cx + Math.cos(rot) * radius * scale * 0.4;
+                let starTipY = cy + Math.sin(rot) * radius * scale * 0.4;
+                ctx.lineTo(starTipX, starTipY);
                 rot += step;
-                x = cx + Math.cos(rot) * radius * scale;
-                y = cy + Math.sin(rot) * radius * scale;
-                ctx.lineTo(x, y);
+                starTipX = cx + Math.cos(rot) * radius * scale;
+                starTipY = cy + Math.sin(rot) * radius * scale;
+                ctx.lineTo(starTipX, starTipY);
             }
             ctx.closePath();
             
@@ -307,61 +531,150 @@
             ctx.stroke();
         }
         
+        function generateBackgroundColors() {
+            backgroundColors = [];
+            switch (level % 5) {
+                case 1: 
+                    backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c'];
+                    break;
+                case 2: 
+                    backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];
+                    break;
+                case 3: 
+                    backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6'];
+                    break;
+                case 4: 
+                    backgroundColors = ['#ff9966', '#ff5e62', '#c84e89'];
+                    break;
+                case 0: 
+                    backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
+                    break;
+            }
+        }
+        
         function initLevel() {
             platforms = [];
             enemies = [];
             stars = [];
+            powerUps = [];
+            particles = []; 
             exitPlatform = null;
             generateBackgroundColors();
-            
-            // Starting platform
+
+            // --- Player's intended starting X (center of screen) ---
+            const playerStartX = canvas.width / 2;
+
+            // --- Define the Green Starting Platform ---
+            const startPlatformWidth = 120; // Slightly wider for easier start
+            const startPlatformHeight = 20;
+            // Position it some distance from the bottom, ensuring it's above the deadly gutter
+            const startPlatformY = canvas.height - 100; 
+            const startPlatformX = playerStartX - startPlatformWidth / 2; // Center it under the player's X
+
             platforms.push({
-                x: 20,
-                y: canvas.height * 0.1, // Start platform near top, adjusted for full height
-                width: 100,
-                height: 20,
-                color1: '#006400',
-                color2: '#004d00',
-                static: true
+                x: startPlatformX,
+                y: startPlatformY,
+                width: startPlatformWidth,
+                height: startPlatformHeight,
+                color1: '#32CD32', // Brighter green (LimeGreen)
+                color2: '#228B22', // ForestGreen (darker shade)
+                static: true,
+                type: 'normal' 
             });
             
-            // Moving platforms
-            const numPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5); // More platforms on higher levels
-            const maxY = canvas.height * 0.9;
-            const minY = canvas.height * 0.15; // Adjusted start Y for platforms
-            const stepY = (maxY - minY) / numPlatforms;
-            
-            for (let i = 0; i < numPlatforms; i++) {
-                const width = 70 + Math.random() * 150;
-                const x = Math.random() * (canvas.width - width);
-                const y = minY + i * stepY;
-                const direction = Math.random() > 0.5 ? 1 : -1;
-                
-                platforms.push({
-                    x,
-                    y,
-                    width,
-                    height: 15,
-                    color1: '#00008B',
-                    color2: '#000066',
-                    static: false,
-                    direction,
-                    speed: platformBaseSpeed * (1.0 + Math.random() * 0.5) // Platforms move faster, individual speeds
-                });
-                
-                // Add enemy to some platforms
-                if (Math.random() < 0.3 + (level * 0.05)) { // Increased chance for enemies on higher levels
-                    enemies.push({
-                        x: x + width / 2,
-                        y: y - 15,
-                        size: 12,
-                        platformIndex: platforms.length - 1
-                    });
-                }
+            const numDynamicPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
+            // Dynamic platforms should be placed above the start platform
+            const maxY = startPlatformY - 80; // Ensure dynamic platforms are well above start platform
+            const minY = canvas.height * 0.15; 
+            const verticalGap = (maxY - minY) / Math.max(1, numDynamicPlatforms); // Avoid division by zero if no dynamic platforms
+
+            let dynamicPlatformConfigs = [];
+            let specialPlatformsToGenerate = [];
+
+            if (level === 1) {
+                // Only standard moving platforms in Level 1
+            } else if (level >= 2 && level <= 4) {
+                const typeToIntroduce = SPECIAL_PLATFORM_TYPES[level - 2];
+                specialPlatformsToGenerate.push(typeToIntroduce);
+            } else if (level >= 5) {
+                specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
+                specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
             }
-            
-            // Red gutter platform at the very bottom
-            platforms.push({
+
+            for (let i = 0; i < numDynamicPlatforms; i++) {
+                let currentType = 'normal'; 
+                let pColor1 = '#00008B'; 
+                let pColor2 = '#000066';
+                let platformSpeedFactor = (1.0 + Math.random() * 0.5);
+                let isStatic = false;
+                let direction = Math.random() > 0.5 ? 1 : -1;
+
+                if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3) { 
+                    currentType = specialPlatformsToGenerate.shift(); 
+                    switch (currentType) {
+                        case 'disappearing':
+                            pColor1 = '#800080'; 
+                            pColor2 = '#4B0082';
+                            isStatic = false; 
+                            break;
+                        case 'bouncy':
+                            pColor1 = '#32CD32'; 
+                            pColor2 = '#228B22';
+                            isStatic = true; 
+                            platformSpeedFactor = 0; 
+                            break;
+                        case 'conveyor':
+                            pColor1 = '#A9A9A9'; 
+                            pColor2 = '#696969';
+                            isStatic = false;
+                            platformSpeedFactor = (1.0 + Math.random() * 0.5); 
+                            break;
+                    }
+                }
+
+                const width = 70 + Math.random() * 150;
+                // Ensure Y is within the dynamic platform range
+                const y = Math.max(minY, Math.min(maxY, minY + (i + 1) * verticalGap)); 
+                const x = Math.random() * (canvas.width - width);
+
+                dynamicPlatformConfigs.push({
+                    x, y, width, height: 15,
+                    color1: pColor1, color2: pColor2,
+                    static: isStatic, direction,
+                    speed: platformBaseSpeed * platformSpeedFactor,
+                    type: currentType,
+                    originalColor1: pColor1, originalColor2: pColor2,
+                    active: true, timer: 0, reappearTime: 120 
+                });
+            }
+
+            while(specialPlatformsToGenerate.length > 0) {
+                const currentType = specialPlatformsToGenerate.shift();
+                let pColor1 = '#00008B'; let pColor2 = '#000066';
+                let platformSpeedFactor = (1.0 + Math.random() * 0.5); let isStatic = false;
+                
+                switch (currentType) {
+                    case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
+                    case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
+                    case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; break;
+                }
+
+                const width = 70 + Math.random() * 150;
+                const y = Math.max(minY, Math.min(maxY, minY + Math.random() * (maxY - minY))); 
+                const x = Math.random() * (canvas.width - width);
+
+                dynamicPlatformConfigs.push({
+                    x, y, width, height: 15, color1: pColor1, color2: pColor2,
+                    static: isStatic, direction: Math.random() > 0.5 ? 1 : -1,
+                    speed: platformBaseSpeed * platformSpeedFactor, type: currentType,
+                    originalColor1: pColor1, originalColor2: pColor2, active: true, timer: 0, reappearTime: 120
+                });
+            }
+
+            dynamicPlatformConfigs.sort((a, b) => a.y - b.y);
+            dynamicPlatformConfigs.forEach(config => platforms.push(config));
+
+            platforms.push({ // Red gutter platform (always last after sorting dynamic ones)
                 x: 0,
                 y: canvas.height - 20,
                 width: canvas.width,
@@ -369,101 +682,210 @@
                 color1: '#8B0000',
                 color2: '#660000',
                 static: true,
-                deadly: true
+                deadly: true,
+                type: 'normal'
             });
             
-            // Add stars
-            const numStars = 5 + level;
-            const maxStarY = canvas.height * 2/3;
+            // Enemy and Power-up placement (Iterate from index 1 as platforms[0] is the start platform)
+            for (let i = 1; i < platforms.length - 1; i++) { // Exclude start platform and gutter
+                const platform = platforms[i];
+                if (!platform) continue; // Should not happen, but good check
+
+                if (Math.random() < (0.3 + (level * 0.05)) && platform.type !== 'bouncy') {
+                    enemies.push({
+                        x: platform.x + platform.width / 2,
+                        y: platform.y - 15,
+                        size: 12,
+                        platformIndex: i, 
+                        direction: Math.random() > 0.5 ? 1 : -1,
+                        speed: platformBaseSpeed * (0.5 + Math.random() * 0.5) * 0.5
+                    });
+                }
+
+                if (Math.random() < 0.08 && platform.type !== 'bouncy' && platform.type !== 'disappearing') {
+                    const puType = Math.random() < 0.5 ? 'invincible' : 'speed';
+                    powerUps.push(new PowerUp(platform.x + platform.width / 2, platform.y - 20, puType));
+                }
+            }
             
+            const numStars = 5 + level;
+            // maxStarY ensures stars are generally in the upper 2/3 but below UI
+            const starMaxY = Math.min(maxY, canvas.height * 2/3); // Stars should not be above highest dynamic platform or 2/3 height
+            const uiExclusionZoneHeight = 120; // Stars should not spawn above this Y coordinate
+
             for (let i = 0; i < numStars; i++) {
                 let valid = false;
                 let starX, starY;
-                
-                while (!valid) {
+                let attempts = 0;
+                const maxAttempts = 100; 
+
+                while (!valid && attempts < maxAttempts) {
                     starX = 20 + Math.random() * (canvas.width - 40);
-                    starY = 20 + Math.random() * (maxStarY - 40);
-                    valid = true;
+                    // Ensure star is below UI and within starMaxY
+                    // Also ensure starY is generally above the start platform area for better gameplay flow
+                    let starYRangeBottom = uiExclusionZoneHeight;
+                    let starYRangeTop = starMaxY - player.radius; // player.radius as a general size for star too
                     
-                    // Check if star is not on top of an enemy
-                    for (const enemy of enemies) {
-                        const dx = starX - enemy.x;
-                        const dy = starY - enemy.y;
+                    if (starYRangeTop <= starYRangeBottom) { // Not enough space or invalid range
+                        // console.warn("Star Y spawn range too small. Skipping star or placing at default.");
+                        // Default to a safe Y if range is bad, or just don't place star
+                        starY = starYRangeBottom + 10; // Place slightly above bottom limit if range is bad
+                        if (starY > starYRangeTop) { attempts++; continue; } // Still problematic
+                    } else {
+                        starY = starYRangeBottom + Math.random() * (starYRangeTop - starYRangeBottom);
+                    }
+                    
+                    valid = true;
+
+                    // Check against existing stars
+                    for (let j = 0; j < stars.length; j++) {
+                        const existingStar = stars[j];
+                        if (existingStar.collected) continue; 
+
+                        const dx = starX - existingStar.x;
+                        const dy = starY - existingStar.y;
                         const distance = Math.sqrt(dx * dx + dy * dy);
-                        if (distance < 30) {
+                        // Using star.radius (15) * 2 = 30 for check
+                        if (distance < 30) { 
                             valid = false;
                             break;
                         }
                     }
-                     // Check if star is not on top of a platform
-                    if (valid) { // Only check platforms if not already invalid by enemy
-                        for (const platform of platforms) {
-                            if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
-                                starY + 10 > platform.y && starY - 10 < platform.y + platform.height) {
-                                valid = false;
-                                break;
-                            }
+                    if (!valid) { attempts++; continue; } 
+
+                    for (const enemy of enemies) {
+                        const dx = starX - enemy.x;
+                        const dy = starY - enemy.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < 30) { valid = false; break; }
+                    }
+                    if (!valid) { attempts++; continue; }
+
+                    for (const platform of platforms) {
+                        // Check if star center is inside platform bounding box (with some margin)
+                        if (starX > platform.x - 10 && starX < platform.x + platform.width + 10 &&
+                            starY > platform.y - 10 && starY < platform.y + platform.height + 10) {
+                            valid = false;
+                            break;
                         }
                     }
+                    if (!valid) { attempts++; continue; }
+
+                    for (const pu of powerUps) {
+                        const dx = starX - pu.x; const dy = starY - pu.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < 40) { valid = false; break; }
+                    }
+                    if (!valid) { attempts++; continue; }
                 }
-                
-                stars.push({
-                    x: starX,
-                    y: starY,
-                    radius: 15,
-                    scale: 1,
-                    collected: false
-                });
+
+                if (valid) { 
+                    stars.push({ x: starX, y: starY, radius: 15, scale: 1, collected: false });
+                } else {
+                    console.warn("Could not find a valid position for a star.");
+                }
             }
             
             // Reset player position
-            player.x = 50;
-            player.y = platforms[0].y - player.radius - 5; // Position player on the starting platform
+            player.x = playerStartX;
+            // Player starts slightly ABOVE the first (start) platform
+            player.y = platforms[0].y - player.radius - 10; // 10px gap to fall
             player.vx = 0;
             player.vy = 0;
             player.scale = 1;
-            player.onGround = false;
-            player.canTakeDamage = true; // Reset damage cooldown
-            clearTimeout(player.damageCooldownTimeout); // Clear any pending timeout
+            player.onGround = false; 
+            player.canTakeDamage = true;
+            clearTimeout(player.damageCooldownTimeout);
+            player.invincible = false;
+            player.invincibleTimer = 0;
+            player.speedBoost = false;
+            player.speedBoostTimer = 0;
         }
         
         function update() {
-            if (gameState === 'playing') {
-                updatePlayer();
-                updatePlatforms();
-                updateEnemies();
-                updateStars();
-                checkExitPlatform();
-            } else if (gameState === 'levelComplete' && keys[' ']) {
-                level++;
-                platformBaseSpeed += 0.05; // Slightly increase base speed for next level
-                gameState = 'playing';
-                initLevel();
-            } else if (gameState === 'gameOver' && keys[' ']) {
-                resetGame();
+            switch (gameState) {
+                case 'start':
+                    if (keys[' ']) {
+                        playerCanMove = true;
+                        gameState = 'playing';
+                        keys[' '] = false;
+                        startMusic();
+                    }
+                    break;
+                case 'playing':
+                    if (keys['p'] || keys['Escape']) {
+                        gameState = 'paused';
+                        keys['p'] = false; keys['Escape'] = false;
+                        if (bgMusic) bgMusic.pause();
+                        playerCanMove = false;
+                    }
+                    updatePlayer();
+                    updatePlatforms();
+                    updateEnemies();
+                    updateStars();
+                    updatePowerUps(); 
+                    updateParticles(); 
+                    checkExitPlatform();
+                    break;
+                case 'paused':
+                    if (keys['p'] || keys['Escape']) {
+                        gameState = 'playing';
+                        keys['p'] = false; keys['Escape'] = false;
+                        if (bgMusic) startMusic();
+                        playerCanMove = true;
+                    }
+                    break;
+                case 'transitioning':
+                    transitionAlpha += transitionSpeed;
+                    if (transitionAlpha >= 1) {
+                        transitionAlpha = 1;
+                        if (transitionCallback) transitionCallback();
+                        transitionSpeed *= -1;
+                    } else if (transitionAlpha <= 0 && transitionSpeed < 0) { // Ensure it only triggers when fading out
+                        transitionAlpha = 0;
+                        transitionSpeed = Math.abs(transitionSpeed);
+                        gameState = 'playing';
+                        playerCanMove = true;
+                    }
+                    break;
+                case 'gameOver':
+                    if (keys[' ']) {
+                        resetGame();
+                        keys[' '] = false;
+                    }
+                    break;
             }
         }
         
         function updatePlayer() {
-            // Horizontal movement
-            if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.2, -4); // Slightly faster horizontal
-            else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.2, 4); // Slightly faster horizontal
-            else player.vx *= 0.9;
+            if (!playerCanMove) {
+                player.vx = 0;
+                return;
+            }
+
+            let currentSpeed = player.baseSpeed;
+            if (player.speedBoost) {
+                currentSpeed *= 1.5; 
+                player.speedBoostTimer--;
+                if (player.speedBoostTimer <= 0) {
+                    player.speedBoost = false;
+                }
+            }
+
+            if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.3, -currentSpeed); // Slightly more responsive
+            else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.3, currentSpeed); // Slightly more responsive
+            else player.vx *= 0.85; // Slightly faster deceleration
             
             player.x += player.vx;
             
-            // Jumping
             if (keys[' '] && player.onGround) {
-                player.vy = -9; // Jumps are slightly higher
+                player.vy = player.baseJump;
                 player.onGround = false;
                 playJumpSound();
             }
             
-            // Gravity
             player.vy += 0.3;
             player.y += player.vy;
             
-            // Boundary check
             if (player.x < player.radius) {
                 player.x = player.radius;
                 player.vx = 0;
@@ -473,70 +895,86 @@
                 player.vx = 0;
             }
             
-            // Platform collision
             let landedOnPlatformThisFrame = false;
             for (const platform of platforms) {
-                // Check if player is falling and will land on platform
-                if (player.vy > 0 && 
+                if (!platform.active) continue; 
+
+                if (player.vy >= 0 && // Only check for landing if player is moving down or still
                     player.y + player.radius > platform.y && 
-                    player.y - player.radius < platform.y + platform.height && // check Y overlap
-                    player.x + player.radius > platform.x && 
-                    player.x - player.radius < platform.x + platform.width) {
+                    player.y + player.radius < platform.y + platform.height + player.vy && // Check based on next frame
+                    player.x + player.radius * 0.7 > platform.x &&  // Reduced hitbox width for leniency
+                    player.x - player.radius * 0.7 < platform.x + platform.width) {
                     
-                    // If player's bottom edge was above platform's top edge in previous frame
-                    // and player is now colliding, it means landing.
-                    if (player.y - player.vy + player.radius <= platform.y) { 
-                        player.y = platform.y - player.radius; // Snap to top of platform
+                    // Ensure player was above the platform in the previous frame
+                    if (player.y - player.vy + player.radius <= platform.y + 1) { 
+                        player.y = platform.y - player.radius;
                         
-                        if (!player.onGround) { // Only apply bounce and play sound if just landed
-                             player.vy = -player.vy * 0.2; // Small bounce
+                        if (!player.onGround) {
+                             if (platform.type === 'bouncy') {
+                                player.vy = player.baseJump * 1.8; 
+                             } else {
+                                player.vy = -player.vy * 0.1; // Reduced bounce
+                             }
                              playLandSound();
                         } else {
-                            player.vy = 0; // Prevent multiple bounces if already on ground
+                            player.vy = 0;
                         }
                         player.onGround = true;
                         landedOnPlatformThisFrame = true;
                         
-                        // Squeeze animation
-                        if (player.scale === 1) { // Only animate if not already squished
+                        if (player.scale === 1) {
                             player.scale = 0.9;
                             setTimeout(() => player.scale = 1, 100);
                         }
                         
-                        // Move with platform
                         if (!platform.static) {
                             player.x += platform.direction * platform.speed;
                         }
+                        if (platform.type === 'conveyor') {
+                             player.x += platform.direction * platform.speed * 1.5; 
+                        }
+
+                        if (platform.type === 'disappearing') {
+                            platform.timer = 60; 
+                            platform.color1 = 'rgba(128,0,128,0.5)'; 
+                            platform.color2 = 'rgba(75,0,130,0.5)';
+                        }
                         
-                        // Check if deadly platform
-                        if (platform.deadly && player.canTakeDamage) {
-                            playerDie(true); // Indicate death by deadly platform
+                        if (platform.deadly && !player.invincible && player.canTakeDamage) {
+                            playerDie(true); // True for fall or deadly platform
                         }
                     }
                 }
             }
-            // If player didn't land on any platform this frame, they are in the air
-            if (!landedOnPlatformThisFrame && player.onGround && player.vy > 0) {
+            if (!landedOnPlatformThisFrame && player.onGround && player.vy > 0.1) { // Small threshold for vy
                  player.onGround = false;
             }
 
-
-            // Enemy collision
             for (const enemy of enemies) {
                 const dx = player.x - enemy.x;
                 const dy = player.y - enemy.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
-                if (distance < player.radius + enemy.size * 0.7 && player.canTakeDamage) { // Reduced enemy hit radius
-                    playerDie(false); // Indicate death by enemy
-                    playEnemyHitSound();
+                if (distance < player.radius + enemy.size * 0.7 && !player.invincible && player.canTakeDamage) {
+                    playEnemyHitSound(); // Play sound before playerDie
+                    playerDie(false); // False for enemy hit
+                    player.vx = dx > 0 ? 5 : -5;
+                    player.vy = -3;
                 }
             }
             
-            // Fall off screen (below the red gutter platform)
-            if (player.y > canvas.height + 50) { // Give a little buffer
-                if (player.canTakeDamage) { // Prevent multiple life losses if already falling
-                    playerDie(true); // Indicate death by fall
+            if (player.y > canvas.height + player.radius * 2) { // Give more margin before dying off screen
+                if (!player.invincible && player.canTakeDamage) {
+                    playerDie(true); // True for fall
+                }
+            }
+
+            if (player.invincibleTimer > 0) {
+                player.invincibleTimer--;
+                if (player.invincibleTimer <= 0) {
+                    player.invincible = false;
+                    player.canTakeDamage = true; 
+                    clearTimeout(player.damageCooldownTimeout); 
                 }
             }
         }
@@ -547,12 +985,21 @@
                 if (!platform.static) {
                     platform.x += platform.direction * platform.speed;
                     
-                    // Reverse direction at edges
                     if (platform.x <= 0 || platform.x + platform.width >= canvas.width) {
                         platform.direction *= -1;
-                        // Nudge back into bounds if it overshot
                         if (platform.x < 0) platform.x = 0;
                         if (platform.x + platform.width > canvas.width) platform.x = canvas.width - platform.width;
+                    }
+                }
+                if (platform.type === 'disappearing' && platform.timer > 0) {
+                    platform.timer--;
+                    if (platform.timer <= 0) {
+                        platform.active = false;
+                        setTimeout(() => {
+                            platform.active = true;
+                            platform.color1 = platform.originalColor1;
+                            platform.color2 = platform.originalColor2;
+                        }, platform.reappearTime * 16); // Approx 2 seconds
                     }
                 }
             }
@@ -560,154 +1007,271 @@
         
         function updateEnemies() {
             for (const enemy of enemies) {
+                if (!platforms[enemy.platformIndex]) { // Safety check if platform removed
+                    // Potentially remove enemy or reassign
+                    continue;
+                }
                 const platform = platforms[enemy.platformIndex];
-                // Enemies stick to the center of their platform
-                enemy.x = platform.x + platform.width / 2;
-                enemy.y = platform.y - enemy.size - 2; // Position slightly above platform
+                
+                enemy.x += enemy.direction * enemy.speed;
+
+                const patrolMargin = 5; // Smaller margin for tighter patrol
+                if (enemy.x - enemy.size / 2 < platform.x + patrolMargin || 
+                    enemy.x + enemy.size / 2 > platform.x + platform.width - patrolMargin) {
+                    enemy.direction *= -1;
+                    // Clamp position to avoid getting stuck
+                    if (enemy.x - enemy.size / 2 < platform.x + patrolMargin) enemy.x = platform.x + patrolMargin + enemy.size / 2;
+                    if (enemy.x + enemy.size / 2 > platform.x + platform.width - patrolMargin) enemy.x = platform.x + platform.width - patrolMargin - enemy.size / 2;
+                }
+                
+                enemy.y = platform.y - enemy.size - 2; // Keep enemy on top of platform
             }
         }
         
         function updateStars() {
             let allCollected = true;
-            
             for (let i = 0; i < stars.length; i++) {
                 const star = stars[i];
-                
                 if (!star.collected) {
                     allCollected = false;
-                    
                     const dx = player.x - star.x;
                     const dy = player.y - star.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (distance < player.radius + star.radius * star.scale * 0.7) {
+                    if (distance < player.radius + star.radius * star.scale * 0.8) { // Slightly larger collection radius
                         star.collected = true;
                         score += 1;
                         playStarSound();
-                        
-                        // Animate star collection
-                        // Using a self-calling anonymous function to capture starIndex and scaleValue
-                        (function animateStar(starIndex, scaleValue) {
-                            if (stars[starIndex] && !stars[starIndex].collected) return; // Stop if star is somehow collected twice
-                            stars[starIndex].scale = scaleValue;
-                            if (scaleValue > 0.1) {
-                                requestAnimationFrame(() => animateStar(starIndex, scaleValue - 0.1));
+                        // Star collection animation
+                        (function animateStarCollect(s, currentScale) {
+                            if (!s || s.collected !== true) return; // Ensure star still exists and is collected
+                            s.scale = currentScale;
+                            if (currentScale > 0.1) {
+                                requestAnimationFrame(() => animateStarCollect(s, currentScale * 0.85)); // Faster shrink
+                            } else {
+                                s.scale = 0; // Ensure it's fully gone
                             }
-                        })(i, 1);
+                        })(star, star.scale);
                     }
                 }
             }
-            
-            // Only create exit platform if all stars are collected AND there isn't one already
-            if (allCollected && !exitPlatform) {
+            if (allCollected && stars.length > 0 && !exitPlatform && gameState === 'playing') { // Check gameState
+                // Position exit platform relative to the last dynamic platform or a fixed spot
+                let lastPlatY = canvas.height * 0.2; // Default high
+                if (platforms.length > 2) { // If there are dynamic platforms
+                    lastPlatY = platforms[platforms.length -2].y; // -2 to get non-gutter platform
+                }
+
                 exitPlatform = {
-                    x: canvas.width - 120,
-                    y: canvas.height * 0.1, // Exit platform near top, adjusted for full height
+                    x: canvas.width - 120, 
+                    y: Math.max(50, lastPlatY - 60), // Place above last platform or high up
                     width: 100,
                     height: 20,
-                    color1: '#006400',
-                    color2: '#004d00',
-                    static: true
+                    color1: '#008000', // Darker Green for Exit
+                    color2: '#006400',
+                    static: true,
+                    type: 'normal'
+                };
+            }
+        }
+
+        function updatePowerUps() {
+            for (let i = powerUps.length - 1; i >= 0; i--) {
+                const powerUp = powerUps[i];
+                powerUp.update(); 
+
+                if (powerUp.collected) continue;
+
+                const dx = player.x - powerUp.x;
+                const dy = player.y - (powerUp.y + Math.sin(powerUp.animationTimer) * 5); // Account for bobbing
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < player.radius + powerUp.radius) {
+                    powerUp.collected = true;
+                    playPowerUpSound();
+                    score += 2; 
+
+                    switch (powerUp.type) {
+                        case 'invincible':
+                            player.invincible = true;
+                            player.invincibleTimer = 300; 
+                            player.canTakeDamage = false; 
+                            clearTimeout(player.damageCooldownTimeout); 
+                            break;
+                        case 'speed':
+                            player.speedBoost = true;
+                            player.speedBoostTimer = 300; 
+                            break;
+                    }
+                    powerUps.splice(i, 1);
+                }
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const particle = particles[i];
+                particle.update();
+                if (particle.lifetime <= 0 || particle.size <= 0.5) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+        
+        function playerDie(isFallOrDeadlyPlatform) {
+            if (!player.canTakeDamage || player.invincible) return; // Added invincible check here too
+            
+            player.lives--;
+            player.canTakeDamage = false;
+            clearTimeout(player.damageCooldownTimeout); 
+            player.invincible = false; 
+            player.invincibleTimer = 0;
+            
+            player.damageCooldownTimeout = setTimeout(() => {
+                player.canTakeDamage = true;
+            }, 1500); // 1.5-second invulnerability after respawn/hit
+            
+            if (player.lives <= 0) {
+                gameOverFinalScore = score;
+                if (gameOverFinalScore > highScore) {
+                    highScore = gameOverFinalScore;
+                    localStorage.setItem('platformGameHighScore', highScore);
+                }
+                
+                playerCanMove = false;
+                gameState = 'transitioning';
+                transitionSpeed = Math.abs(transitionSpeed); // Ensure fade in
+                transitionAlpha = 0;
+                transitionCallback = () => {
+                    gameState = 'gameOver';
+                    playGameOverSound();
+                };
+
+            } else {
+                if (isFallOrDeadlyPlatform) { // Sound played for fall/deadly platform
+                    playLifeLostSound();
+                } // Enemy hit sound is played in updatePlayer
+                
+                playerCanMove = false;
+                gameState = 'transitioning';
+                transitionSpeed = Math.abs(transitionSpeed); // Ensure fade in
+                transitionAlpha = 0;
+                transitionCallback = () => {
+                    // Respawn player at the starting platform's position
+                    player.x = canvas.width / 2; // Centered X
+                    if (platforms.length > 0 && platforms[0]) { // Ensure start platform exists
+                         player.y = platforms[0].y - player.radius - 10; // Above start platform
+                    } else { // Fallback if start platform somehow missing
+                         player.y = canvas.height / 2;
+                    }
+                    player.vx = 0;
+                    player.vy = 0;
+                    player.scale = 1;
+                    player.onGround = false; 
+                    // player.canTakeDamage is handled by the cooldown timeout
                 };
             }
         }
         
-        // isFallOrDeadlyPlatform: true if died from fall/deadly platform, false if by enemy
-        function playerDie(isFallOrDeadlyPlatform) {
-            if (!player.canTakeDamage) return; // Prevent multiple deaths from one hit/fall
-            
-            player.lives--;
-            player.canTakeDamage = false; // Disable damage for a duration
-            clearTimeout(player.damageCooldownTimeout); // Clear previous timeout if any
-            player.damageCooldownTimeout = setTimeout(() => {
-                player.canTakeDamage = true;
-            }, 1000); // 1-second invulnerability
-            
-            if (player.lives <= 0) {
-                gameState = 'gameOver';
-                playGameOverSound();
-            } else {
-                if (isFallOrDeadlyPlatform) {
-                    playLifeLostSound(); // Specific sound for falling/deadly platform
-                } 
-                // Enemy hit sound is played in updatePlayer directly when collision occurs
-                
-                // Animate player shrinking
-                (function animatePlayerDeath(scale) {
-                    player.scale = scale;
-                    if (scale > 0.1) {
-                        requestAnimationFrame(() => animatePlayerDeath(scale - 0.1));
-                    } else {
-                        // Reset player after animation completes
-                        player.x = 50;
-                        player.y = platforms[0].y - player.radius - 5; // Reset to starting platform
-                        player.vx = 0;
-                        player.vy = 0;
-                        player.scale = 1;
-                        player.onGround = false;
-                    }
-                })(1);
-            }
-        }
-        
         function checkExitPlatform() {
-            if (exitPlatform) {
+            if (exitPlatform && gameState === 'playing') { // Check gameState here
                 if (player.y + player.radius > exitPlatform.y && 
                     player.y - player.radius < exitPlatform.y + exitPlatform.height &&
                     player.x + player.radius > exitPlatform.x && 
                     player.x - player.radius < exitPlatform.x + exitPlatform.width) {
                     
-                    if (gameState !== 'levelComplete') { // Prevent re-triggering sound/score if already complete
-                        gameState = 'levelComplete';
-                        score += 5; // 5 points for completing level
-                        playLevelCompleteSound();
-                    }
+                    score += 5 * level; // More points for higher levels
+                    playLevelCompleteSound();
+                    
+                    playerCanMove = false;
+                    gameState = 'transitioning';
+                    transitionSpeed = Math.abs(transitionSpeed); // Ensure fade in
+                    transitionAlpha = 0;
+                    transitionCallback = () => {
+                        level++;
+                        platformBaseSpeed = Math.min(1.5, platformBaseSpeed + 0.05); // Cap platform speed
+                        initLevel();
+                        // gameState will be set to 'playing' after transition fades out
+                    };
                 }
             }
         }
         
-        function draw() {
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (backgroundColors.length > 0) {
+                backgroundColors.forEach((color, index) => {
+                    gradient.addColorStop(index / (backgroundColors.length - 1), color);
+                });
+            } else { // Fallback if colors not generated
+                gradient.addColorStop(0, '#000033');
+                gradient.addColorStop(1, '#000000');
+            }
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawGameElements() {
             drawBackground();
             
-            // Draw platforms
             for (const platform of platforms) {
-                drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
+                if (platform.active) { // Only draw active platforms
+                    drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
+                }
             }
             
-            // Draw exit platform
             if (exitPlatform) {
                 drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
                 
-                // Text for exit platform with outline
                 ctx.fillStyle = 'white';
                 ctx.strokeStyle = 'black';
                 ctx.lineWidth = 3;
                 ctx.font = 'bold 18px Arial';
                 ctx.textAlign = 'center';
-                ctx.strokeText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
-                ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
+                // Adjust text Y position for better centering on platform
+                const textMetrics = ctx.measureText('EXIT');
+                const textHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+                ctx.strokeText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + textHeight / 3);
+                ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + textHeight / 3);
             }
             
-            // Draw stars
             for (const star of stars) {
-                if (!star.collected) {
+                if (!star.collected || star.scale > 0) { // Draw if not collected or still animating out
                     drawStarWithGradient(star.x, star.y, star.radius, 5, '#FFFF00', '#FFD700', star.scale);
                 }
             }
+
+            for (const powerUp of powerUps) { // PowerUps array now only contains non-collected ones
+                powerUp.draw(ctx);
+            }
             
-            // Draw enemies
             for (const enemy of enemies) {
                 drawTriangleWithGradient(enemy.x, enemy.y, enemy.size, '#FF0000', '#8B0000');
             }
             
-            // Draw player
-            drawCircleWithGradient(player.x, player.y, player.radius, '#FFFFFF', '#87CEEB', player.scale);
+            let playerColor1 = '#FFFFFF'; // Default: White
+            let playerColor2 = '#ADD8E6'; // Default: LightBlue
             
-            // Draw UI (Score, Level, Lives) with outline
+            // Flash if invincible from power-up
+            if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 6) % 2 === 0) { 
+                playerColor1 = '#FFD700'; 
+                playerColor2 = '#FFA500'; 
+            } 
+            // Flash differently if recently took damage (but not power-up invincibility)
+            else if (!player.canTakeDamage && player.invincibleTimer <= 0 && Math.floor(Date.now() / 100) % 2 === 0) {
+                playerColor1 = 'rgba(255, 255, 255, 0.5)'; // Semi-transparent white
+                playerColor2 = 'rgba(173, 216, 230, 0.5)'; // Semi-transparent lightblue
+            }
+
+            drawCircleWithGradient(player.x, player.y, player.radius, playerColor1, playerColor2, player.scale);
+
+            for (const particle of particles) {
+                particle.draw(ctx);
+            }
+            
             ctx.fillStyle = 'white';
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 3;
-            ctx.font = 'bold 20px Arial'; // Slightly larger font for UI
+            ctx.font = 'bold 20px Arial'; 
             ctx.textAlign = 'left';
 
             ctx.strokeText(`Score: ${score}`, 10, 30);
@@ -716,31 +1280,91 @@
             ctx.strokeText(`Level: ${level}`, 10, 60);
             ctx.fillText(`Level: ${level}`, 10, 60);
 
-            ctx.strokeText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 90);
-            ctx.fillText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 90);
-            
-            // Draw game state messages with outline
-            ctx.textAlign = 'center'; // Center text for messages
-            ctx.lineWidth = 4; // Thicker outline for messages
+            // Display lives with hearts, ensuring it doesn't go negative if lives somehow drop below 0 before game over
+            ctx.strokeText(`Lives: ${'❤️'.repeat(Math.max(0, player.lives))}`, 10, 90);
+            ctx.fillText(`Lives: ${'❤️'.repeat(Math.max(0, player.lives))}`, 10, 90);
+        }
 
-            if (gameState === 'levelComplete') {
-                ctx.font = 'bold 30px Arial';
-                ctx.strokeText(`Get ready for level: ${level + 1}`, canvas.width / 2, canvas.height / 2);
-                ctx.fillText(`Get ready for level: ${level + 1}`, canvas.width / 2, canvas.height / 2);
-                ctx.strokeText('Press SPACE to continue', canvas.width / 2, canvas.height / 2 + 40);
-                ctx.fillText('Press SPACE to continue', canvas.width / 2, canvas.height / 2 + 40);
+        function drawScreenMessage(title, message, titleColor, messageColor, titleSize, messageSize) {
+            ctx.fillStyle = titleColor;
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 4;
+            ctx.font = `bold ${titleSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.strokeText(title, canvas.width / 2, canvas.height / 2 - 30); // Adjusted Y
+            ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 30);
+
+            if (message) {
+                ctx.fillStyle = messageColor;
+                ctx.font = `bold ${messageSize}px Arial`;
+                ctx.lineWidth = 3;
+                ctx.strokeText(message, canvas.width / 2, canvas.height / 2 + 20); // Adjusted Y
+                ctx.fillText(message, canvas.width / 2, canvas.height / 2 + 20);
+            }
+        }
+
+        function drawStartScreen() {
+            drawBackground(); // Use level 1 background for start screen
+            drawScreenMessage("REACH FOR THE STARS", "Press SPACE to Start", 'cyan', 'white', 40, 25);
+            ctx.font = 'bold 18px Arial';
+            ctx.lineWidth = 2;
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            const instructionYStart = canvas.height / 2 + 70;
+            ctx.strokeText("Controls: Arrow Keys to Move, SPACE to Jump", canvas.width / 2, instructionYStart);
+            ctx.fillText("Controls: Arrow Keys to Move, SPACE to Jump", canvas.width / 2, instructionYStart);
+            ctx.strokeText("Collect all stars to find the EXIT!", canvas.width / 2, instructionYStart + 30);
+            ctx.fillText("Collect all stars to find the EXIT!", canvas.width / 2, instructionYStart + 30);
+            ctx.strokeText("P / ESC: Pause Game", canvas.width / 2, instructionYStart + 60);
+            ctx.fillText("P / ESC: Pause Game", canvas.width / 2, instructionYStart + 60);
+        }
+
+        function drawPausedScreen() {
+            drawGameElements(); 
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawScreenMessage("PAUSED", "Press P or ESC to Resume", 'yellow', 'white', 40, 25);
+        }
+
+        function drawGameOverScreen() {
+            drawBackground(); // Use current level's background or a specific game over background
+            drawScreenMessage("GAME OVER", `Final Score: ${gameOverFinalScore}`, 'red', 'white', 40, 25);
+            
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 25px Arial';
+            ctx.textAlign = 'center';
+            ctx.strokeText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + 70); // Adjusted Y
+            ctx.fillText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + 70);
+
+            ctx.font = 'bold 20px Arial';
+            ctx.strokeText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2 + 110); // Adjusted Y
+            ctx.fillText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2 + 110);
+        }
+
+        function drawTransitionOverlay() {
+            ctx.fillStyle = `rgba(0, 0, 0, ${transitionAlpha})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === 'start') {
+                if (backgroundColors.length === 0) generateBackgroundColors(); // Ensure bg for start screen
+                drawStartScreen();
+            } else if (gameState === 'playing' || gameState === 'paused' || gameState === 'levelComplete' || gameState === 'transitioning') {
+                drawGameElements();
+                if (gameState === 'paused') {
+                    drawPausedScreen();
+                }
             } else if (gameState === 'gameOver') {
-                ctx.font = 'bold 40px Arial';
-                ctx.strokeStyle = 'darkred'; // Different outline for game over
-                ctx.strokeText('GAME OVER', canvas.width / 2, canvas.height / 2);
-                ctx.fillStyle = 'red'; // Red fill for game over
-                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
-                
-                ctx.font = 'bold 30px Arial';
-                ctx.strokeStyle = 'black';
-                ctx.fillStyle = 'white';
-                ctx.strokeText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
-                ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
+                drawGameOverScreen();
+            }
+            
+            if (gameState === 'transitioning') {
+                drawTransitionOverlay();
             }
         }
         
@@ -748,12 +1372,25 @@
             player.lives = 3;
             score = 0;
             level = 1;
-            platformBaseSpeed = 0.7; // Reset base speed
-            gameState = 'playing';
+            platformBaseSpeed = 0.7;
+            
+            initLevel(); 
+            
+            gameState = 'playing'; // Set to playing directly after reset
             player.canTakeDamage = true;
-            clearTimeout(player.damageCooldownTimeout); // Ensure damage cooldown is cleared
-            initLevel();
-            startMusic(); // Ensure music restarts if it was stopped/paused
+            clearTimeout(player.damageCooldownTimeout); 
+            player.invincible = false;
+            player.invincibleTimer = 0;
+            player.speedBoost = false;
+            player.speedBoostTimer = 0;
+            
+            transitionAlpha = 0; // Reset transition
+            // transitionSpeed = Math.abs(transitionSpeed); // Already handled if needed by game state logic
+            transitionCallback = null;
+            playerCanMove = true; // Allow movement immediately
+
+            particles = []; 
+            startMusic(); 
         }
         
         function gameLoop() {
@@ -762,7 +1399,9 @@
             requestAnimationFrame(gameLoop);
         }
         
-        initLevel();
+        // Initial call to set up level 1 elements, player, and platform positions
+        initLevel(); 
+        // Start game loop
         gameLoop();
     </script>
 </body>

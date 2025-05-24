@@ -1216,6 +1216,24 @@
 
         function drawStartScreen() {
             drawBackground();
+            
+            // --- MODIFICATION START ---
+            // Draw the first platform (the green starting one)
+            if (platforms.length > 0) {
+                const startPlatform = platforms[0];
+                drawRectWithGradient(startPlatform.x, startPlatform.y, startPlatform.width, startPlatform.height, startPlatform.color1, startPlatform.color2);
+            }
+
+            // Draw player on the starting platform
+            let playerColor1 = '#FFFFFF';
+            let playerColor2 = '#87CEEB';
+            drawCircleWithGradient(player.x, player.y, player.radius, playerColor1, playerColor2, player.scale);
+            // --- MODIFICATION END ---
+
+            // Draw start screen text
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent overlay for text readability
+            ctx.fillRect(0, 0, canvas.width, canvas.height); // Cover the elements drawn above
+            
             drawScreenMessage("REACH FOR THE STARS", "Press SPACE to Start", 'cyan', 'white', 40, 25);
             ctx.font = 'bold 18px Arial';
             ctx.lineWidth = 2;

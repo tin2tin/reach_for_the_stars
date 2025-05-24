@@ -21,3 +21,6 @@ When the player is out of lives, write "GAME OVER" and line break. And wait for 
 Do not do a pop-up when dying, instead animate the player gradually smaller until invisible and then let the player start again.
 
 Add a mouse-click button in a corner to restart the game. Make the width of the game screen 70% of the window x size but 100% of y window size
+
+Add fitting sounds for this game, no drone or music, only coded effect sounds, correct the bounce, so it only bounces once the hits a platform, make it use the full height and 40% of the width, make the texts white with a black outline, add a mute button below the reset game button. Add one mp3 file for music: https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Cycling%20Platforms.mp3 . Ensure that hitting an enemy only subtracts one life, make the platforms move slightliy faster, but always at individual speeds, and the jumps are slightly higher, Write the full code:
+

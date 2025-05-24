@@ -43,6 +43,66 @@
         .control-button:active {
             background: linear-gradient(to bottom, #c44d4d, #ff6b6b);
         }
+
+        /* --- Mobile Controls Styling --- */
+        #mobile-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            display: none; /* Hidden by default */
+            justify-content: space-between;
+            align-items: flex-end;
+            z-index: 10;
+        }
+
+        #mobile-controls .control-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        #mobile-controls button {
+            padding: 15px 25px;
+            background: linear-gradient(to bottom, #4CAF50, #2E8B57); /* Greenish for controls */
+            border: 2px solid black;
+            border-radius: 50%; /* Make them circular */
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            -webkit-user-select: none; /* Disable text selection for touch */
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            touch-action: manipulation; /* Prevent default browser touch actions */
+        }
+
+        #mobile-controls button:active {
+            background: linear-gradient(to bottom, #2E8B57, #4CAF50);
+            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5);
+        }
+
+        /* Only show mobile controls on smaller screens (e.g., typical mobile viewport) */
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: flex;
+            }
+            /* Adjust canvas size for mobile if necessary to prevent clipping, or ensure it fits */
+            body {
+                 flex-direction: column; /* Ensure vertical layout */
+                 justify-content: flex-start; /* Align canvas to top */
+            }
+            canvas {
+                max-width: 100%; /* Ensure canvas doesn't overflow */
+                max-height: calc(100vh - 120px); /* Leave space for controls/buttons */
+                margin-top: 10px; /* Small margin from top */
+            }
+            #controls {
+                top: 5px; /* Adjust top controls to be less intrusive */
+                right: 5px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -52,6 +112,14 @@
     </div>
     <canvas id="gameCanvas"></canvas>
     
+    <div id="mobile-controls">
+        <div class="control-group">
+            <button id="left-btn">←</button>
+            <button id="right-btn">→</button>
+        </div>
+        <button id="jump-btn">JUMP</button>
+    </div>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -154,6 +222,30 @@
             }
             startMusic();
         }, { once: true });
+        
+        // --- Mobile Controls Event Listeners ---
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+        const jumpBtn = document.getElementById('jump-btn');
+
+        function setupTouchControl(btn, key) {
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent scrolling/zooming
+                keys[key] = true;
+            });
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys[key] = false;
+            });
+            // Also listen for mouse events on buttons for dev/testing on desktop
+            btn.addEventListener('mousedown', () => keys[key] = true);
+            btn.addEventListener('mouseup', () => keys[key] = false);
+            btn.addEventListener('mouseleave', () => keys[key] = false); // Important for mouse events
+        }
+
+        setupTouchControl(leftBtn, 'ArrowLeft');
+        setupTouchControl(rightBtn, 'ArrowRight');
+        setupTouchControl(jumpBtn, ' '); // Spacebar key
         
         // --- Game State Variables ---
         let player = {
@@ -461,10 +553,10 @@
             exitPlatform = null;
             generateBackgroundColors();
             
-            // Green starting platform - adjusted Y to be higher in the corner
+            // Green starting platform - Adjusted Y to be clearly visible in the top-left corner
             platforms.push({
                 x: 20,
-                y: canvas.height * 0.05, // Adjusted to be visually closer to the top edge
+                y: canvas.height * 0.02, // Adjusted to be visually closer to the top edge
                 width: 100,
                 height: 20,
                 color1: '#006400', 
@@ -659,11 +751,12 @@
             
             // Reset player position
             player.x = 50;
-            player.y = platforms[0].y - player.radius - 5;
+            // Player starts directly on the platform and is immediately onGround
+            player.y = platforms[0].y - player.radius; 
             player.vx = 0;
             player.vy = 0;
             player.scale = 1;
-            player.onGround = false;
+            player.onGround = true; // Player starts on the ground
             player.canTakeDamage = true;
             clearTimeout(player.damageCooldownTimeout);
             player.invincible = false;
@@ -933,7 +1026,7 @@
             if (allCollected && !exitPlatform) {
                 exitPlatform = {
                     x: canvas.width - 120, // Right side
-                    y: canvas.height - 70, // Adjusted to be in the lower part (platform height + margin)
+                    y: canvas.height - 80, // Adjusted to be in the lower part (platform height + margin)
                     width: 100,
                     height: 20,
                     color1: '#006400',
@@ -1027,11 +1120,12 @@
                 gameState = 'transitioning';
                 transitionCallback = () => {
                     player.x = 50;
-                    player.y = platforms[0].y - player.radius - 5;
+                    // Player spawns directly on the first platform
+                    player.y = platforms[0].y - player.radius; 
                     player.vx = 0;
                     player.vy = 0;
                     player.scale = 1;
-                    player.onGround = false;
+                    player.onGround = true; // Ensure they are on ground
                 };
             }
         }

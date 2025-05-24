@@ -131,6 +131,11 @@
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth * 0.4;
             canvas.height = window.innerHeight;
+            // Reset player position and level elements on resize to ensure they are correctly placed
+            // This is a robust way to handle dynamic resizing, though it resets progress.
+            // A more advanced solution would try to rescale and reposition existing elements.
+            resetGame(); 
+            // Immediately redraw after resize/reset
             draw();
         });
         
@@ -250,7 +255,7 @@
         // --- Game State Variables ---
         let player = {
             x: 50,
-            y: 50,
+            y: 50, // Initial Y, will be overridden by initLevel
             radius: 15,
             vx: 0,
             vy: 0,
@@ -544,36 +549,6 @@
             }
         }
         
-        // --- Helper Function for Star Placement ---
-        function isValidStarPosition(x, y, starRadius) {
-            // 1. Check if in UI area
-            if (x < 150 && y < 120) return false;
-
-            // 2. Check if too close to other stars
-            const minStarDistance = starRadius * 2.5; // Minimum distance between star centers
-            for (const existingStar of stars) {
-                const dx = x - existingStar.x;
-                const dy = y - existingStar.y;
-                if (Math.sqrt(dx * dx + dy * dy) < minStarDistance) return false;
-            }
-
-            // 3. Check if on top of an enemy
-            for (const enemy of enemies) {
-                const dx = x - enemy.x;
-                const dy = y - enemy.y;
-                if (Math.sqrt(dx * dx + dy * dy) < enemy.size + starRadius + 10) return false; // Added buffer
-            }
-
-            // 4. Check if on top of a platform
-            for (const platform of platforms) {
-                if (x + starRadius > platform.x && x - starRadius < platform.x + platform.width &&
-                    y + starRadius > platform.y && y - starRadius < platform.y + platform.height) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
         function initLevel() {
             platforms = [];
             enemies = [];
@@ -585,8 +560,8 @@
             
             // Green starting platform - Adjusted Y to be clearly visible in the top-left corner
             platforms.push({
-                x: 100,
-                y: 100, // Fixed pixel value from top for better control
+                x: 20,
+                y: canvas.height * 0.05, // Ensure it's high up
                 width: 100,
                 height: 20,
                 color1: '#006400', 
@@ -596,8 +571,8 @@
             });
             
             const numDynamicPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
-            const maxY = canvas.height * 0.9; // Max Y for platforms
-            const minY = platforms[0].y + platforms[0].height + 50; // Min Y for platforms, below starting platform
+            const maxY = canvas.height * 0.9; // Bottom boundary for dynamic platforms
+            const minY = canvas.height * 0.15; // Top boundary for dynamic platforms (below start platform)
             const verticalGap = (maxY - minY) / (numDynamicPlatforms + 1);
 
             let dynamicPlatformConfigs = [];
@@ -607,41 +582,46 @@
 
             if (level === 1) {
                 // Only standard moving platforms in Level 1
+                // specialPlatformsToGenerate remains empty
             } else if (level >= 2 && level <= 4) {
+                // Introduce one new type sequentially for levels 2, 3, 4
                 const typeToIntroduce = SPECIAL_PLATFORM_TYPES[level - 2];
                 specialPlatformsToGenerate.push(typeToIntroduce);
             } else if (level >= 5) {
+                // Level 5 onwards: Add two random special platforms
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
             }
 
             // Generate dynamic platform configurations
             for (let i = 0; i < numDynamicPlatforms; i++) {
-                let currentType = 'normal'; 
-                let pColor1 = '#00008B'; 
+                let currentType = 'normal'; // Default to normal moving platform
+                let pColor1 = '#00008B'; // Dark Blue
                 let pColor2 = '#000066';
                 let platformSpeedFactor = (1.0 + Math.random() * 0.5);
                 let isStatic = false;
                 let direction = Math.random() > 0.5 ? 1 : -1;
 
-                if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3 + (i * 0.05) ) { // Increase chance to pick special as we iterate
-                    currentType = specialPlatformsToGenerate.shift(); 
+                if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3) { 
+                    currentType = specialPlatformsToGenerate.shift(); // Takes the first element
                     switch (currentType) {
-                        case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
-                        case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
-                        case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; platformSpeedFactor = (1.0 + Math.random() * 0.5); break;
+                        case 'disappearing':
+                            pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
+                        case 'bouncy':
+                            pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
+                        case 'conveyor':
+                            pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; platformSpeedFactor = (1.0 + Math.random() * 0.5); break;
                     }
                 }
 
                 const width = 70 + Math.random() * 150;
-                const y = minY + (i + 1) * verticalGap;
+                const y = minY + (i + 1) * verticalGap; // Spread platforms evenly vertically
                 const x = Math.random() * (canvas.width - width);
 
                 dynamicPlatformConfigs.push({
-                    x, y, width, height: 15, color1: pColor1, color2: pColor2,
-                    static: isStatic, direction, speed: platformBaseSpeed * platformSpeedFactor,
-                    type: currentType, originalColor1: pColor1, originalColor2: pColor2,
-                    active: true, timer: 0, reappearTime: 120 
+                    x, y, width, height: 15, color1: pColor1, color2: pColor2, static: isStatic, direction,
+                    speed: platformBaseSpeed * platformSpeedFactor, type: currentType,
+                    originalColor1: pColor1, originalColor2: pColor2, active: true, timer: 0, reappearTime: 120 
                 });
             }
 
@@ -676,7 +656,8 @@
                 color1: '#8B0000', color2: '#660000', static: true, deadly: true, type: 'normal'
             });
             
-            for (let i = 1; i < platforms.length - 1; i++) {
+            // --- Enemy and Power-up placement ---
+            for (let i = 1; i < platforms.length - 1; i++) { // Exclude start and gutter
                 const platform = platforms[i];
                 if (Math.random() < (0.3 + (level * 0.05)) && platform.type !== 'bouncy') {
                     enemies.push({
@@ -691,33 +672,67 @@
                 }
             }
             
+            // Add stars with safe zone and no overlap
             const numStars = 5 + level;
-            const starRadius = 15;
-            const maxStarY = canvas.height * 2/3;
+            const safeZoneTop = 100; // Pixels from top to avoid UI text
+            const safeZoneLeft = 150; // Pixels from left to avoid UI text
+            const maxStarY = canvas.height * 2/3; // Don't place stars too low
+            const minStarX = safeZoneLeft;
+            const minStarY = safeZoneTop;
             
-            for (let i = 0; i < numStars; i++) {
-                let attempts = 0; // To prevent infinite loops
+            for (let i = 0; i < stars.length; ) { // Use i++ inside the loop when a valid star is placed
+                let valid = false;
                 let starX, starY;
-                do {
-                    starX = 20 + Math.random() * (canvas.width - 40);
-                    starY = 20 + Math.random() * (maxStarY - 40);
+                let attempts = 0; // Prevent infinite loop in rare cases
+
+                while (!valid && attempts < 100) {
+                    starX = minStarX + Math.random() * (canvas.width - minStarX - 20); // Avoid right edge
+                    starY = minStarY + Math.random() * (maxStarY - minStarY);
+                    valid = true;
                     attempts++;
-                    if (attempts > 100) { // Failsafe
-                        console.warn("Could not place a star after 100 attempts. Skipping.");
-                        break; 
+
+                    // Check against enemies
+                    for (const enemy of enemies) {
+                        const dx = starX - enemy.x; const dy = starY - enemy.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < 30) { valid = false; break; }
                     }
-                } while (!isValidStarPosition(starX, starY, starRadius));
-                
-                if (isValidStarPosition(starX, starY, starRadius)) { // Double check after loop
-                    stars.push({ x: starX, y: starY, radius: starRadius, scale: 1, collected: false });
+                    if (!valid) continue;
+                    // Check against platforms
+                    for (const platform of platforms) {
+                        if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
+                            starY + 10 > platform.y && starY - 10 < platform.y + platform.height) {
+                            valid = false; break;
+                        }
+                    }
+                    if (!valid) continue;
+                    // Check against power-ups
+                    for (const pu of powerUps) {
+                        const dx = starX - pu.x; const dy = starY - pu.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < 40) { valid = false; break; }
+                    }
+                    if (!valid) continue;
+                    // Check against other stars for overlap
+                    for (const existingStar of stars) {
+                        const dx = starX - existingStar.x; const dy = starY - existingStar.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < existingStar.radius * 2) { // Check if too close
+                            valid = false; break;
+                        }
+                    }
+                }
+                if (valid) {
+                    stars.push({ x: starX, y: starY, radius: 15, scale: 1, collected: false });
+                    i++; // Increment only if a star was successfully placed
+                } else if (attempts >= 100) {
+                    console.warn("Could not place a star after 100 attempts, skipping.");
+                    i++; // Skip this star if too many attempts
                 }
             }
             
-            // Reset player position
+            // Reset player position and state
             player.x = 50;
-            player.y = platforms[0].y - player.radius; 
+            player.y = platforms[0].y - player.radius; // Place player directly on the first platform
             player.vx = 0;
-            player.vy = 0; // Ensure no initial velocity
+            player.vy = 0;
             player.scale = 1;
             player.onGround = true; // Player starts on the ground
             player.canTakeDamage = true;
@@ -1086,7 +1101,7 @@
                     // Player spawns directly on the first platform
                     player.y = platforms[0].y - player.radius; 
                     player.vx = 0;
-                    player.vy = 0; // Ensure no initial velocity
+                    player.vy = 0;
                     player.scale = 1;
                     player.onGround = true; // Ensure they are on ground
                 };
@@ -1283,20 +1298,14 @@
             level = 1;
             platformBaseSpeed = 0.7;
             
-            initLevel(); 
+            initLevel(); // This will correctly position the player
             
             gameState = 'playing';
-            player.canTakeDamage = true;
-            clearTimeout(player.damageCooldownTimeout); 
-            player.invincible = false;
-            player.invincibleTimer = 0;
-            player.speedBoost = false;
-            player.speedBoostTimer = 0;
+            playerCanMove = true; // Allow movement immediately
             
             transitionAlpha = 0;
             transitionSpeed = Math.abs(transitionSpeed);
             transitionCallback = null;
-            playerCanMove = true;
 
             particles = []; // Clear particles on reset
             startMusic(); 
@@ -1308,7 +1317,7 @@
             requestAnimationFrame(gameLoop);
         }
         
-        initLevel();
+        initLevel(); // Initialize the level state before the first game loop
         gameLoop();
     </script>
 </body>

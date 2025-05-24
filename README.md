@@ -2,4 +2,4 @@
 A html platform game
 
 Play:
-https://rawgit.com/tin2tin/reach_for_the_stars/master/index.html
+https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/reach_for_the_stars/master/index.html

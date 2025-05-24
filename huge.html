@@ -87,7 +87,7 @@
         
         function createOscillatorSound(frequency, duration, type = 'sine', startTime = 0) {
             if (isMuted) return;
-            if (gameState !== 'playing' && gameState !== 'levelComplete') return; // Only play sounds during active gameplay
+            if (gameState !== 'playing' && gameState !== 'levelComplete') return;
             
             if (!audioContext) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -111,6 +111,7 @@
             oscillator.stop(actualStartTime + duration);
         }
 
+        // Specific sound effects functions
         function playJumpSound() { createOscillatorSound(600, 0.1, 'triangle'); emitParticles(player.x, player.y + player.radius, 'jump_puff'); }
         function playLandSound() { createOscillatorSound(200, 0.08, 'square'); emitParticles(player.x, player.y + player.radius, 'dust'); }
         function playStarSound() { createOscillatorSound(800, 0.05, 'sine'); createOscillatorSound(1000, 0.05, 'sine', 0.05); emitParticles(player.x, player.y, 'sparkle'); }
@@ -195,6 +196,17 @@
         let transitionCallback = null;
         let playerCanMove = false;
         
+        // --- Global Platform Types ---
+        const ALL_SPECIAL_PLATFORM_TYPES = ['disappearing', 'bouncy', 'conveyor'];
+
+        // --- Helper for array shuffling ---
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
         // --- Particle Class ---
         class Particle {
             constructor(x, y, type, color, size, vx, vy, lifetime) {
@@ -213,31 +225,21 @@
             update() {
                 this.x += this.vx;
                 this.y += this.vy;
-                this.vy += 0.1; // Apply some gravity for dust/splatter
+                if (this.type !== 'sparkle') { // Sparkles don't have gravity
+                    this.vy += 0.1;
+                }
                 this.lifetime--;
                 this.alpha = this.lifetime / this.originalLifetime;
-                if (this.type === 'sparkle') {
-                    this.size *= 0.98; // Shrink sparkles
-                } else {
-                    this.size *= 0.95; // Shrink other particles
-                }
+                this.size *= 0.95; // Shrink particles over time
             }
 
             draw(ctx) {
                 ctx.save();
                 ctx.globalAlpha = this.alpha;
                 ctx.fillStyle = this.color;
-                if (this.type === 'sparkle') {
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (this.type === 'dust' || this.type === 'jump_puff') {
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (this.type === 'hit_splatter') {
-                    ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
-                }
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.restore();
             }
         }
@@ -256,7 +258,7 @@
             switch (type) {
                 case 'sparkle':
                     numParticles = 5 + Math.random() * 5;
-                    color = 'yellow';
+                    color = 'gold';
                     minSize = 3; maxSize = 6;
                     minVx = -2; maxVx = 2;
                     minVy = -2; maxVy = 2; // Sparkles don't have gravity
@@ -351,7 +353,7 @@
             }
         }
 
-        // --- Drawing Helpers ---
+        // --- Drawing Helpers (already existing) ---
         function drawCircleWithGradient(x, y, radius, color1, color2, scale = 1) {
             ctx.beginPath();
             const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * scale);
@@ -466,11 +468,49 @@
                 color1: '#006400',
                 color2: '#004d00',
                 static: true,
-                type: 'normal'
+                type: 'normal',
+                active: true, // Always active
             });
             
-            // Moving platforms
+            // Determine platform types for this level based on rules
+            let platformTypesForThisLevel = [];
             const numPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
+            
+            if (level === 1) {
+                // Level 1: Only normal platforms
+                for (let i = 0; i < numPlatforms; i++) {
+                    platformTypesForThisLevel.push('normal');
+                }
+            } else if (level <= ALL_SPECIAL_PLATFORM_TYPES.length + 1) { // Levels 2, 3, 4 (introducing one new type per level)
+                const newTypeIndex = level - 2; // 0 for level 2 (disappearing), 1 for level 3 (bouncy), 2 for level 4 (conveyor)
+                const newlyIntroducedType = ALL_SPECIAL_PLATFORM_TYPES[newTypeIndex];
+                
+                // Guarantee at least one of the newly introduced type
+                platformTypesForThisLevel.push(newlyIntroducedType); 
+
+                // Fill the rest with normal platforms or previously introduced special types
+                const availableFillerTypes = ['normal'];
+                for (let i = 0; i < newTypeIndex; i++) { // Add previously introduced types
+                    availableFillerTypes.push(ALL_SPECIAL_PLATFORM_TYPES[i]);
+                }
+                while (platformTypesForThisLevel.length < numPlatforms) {
+                    platformTypesForThisLevel.push(availableFillerTypes[Math.floor(Math.random() * availableFillerTypes.length)]);
+                }
+            } else { // Level 5 and onwards (all types introduced)
+                // Guarantee two random special platforms
+                platformTypesForThisLevel.push(ALL_SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * ALL_SPECIAL_PLATFORM_TYPES.length)]);
+                platformTypesForThisLevel.push(ALL_SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * ALL_SPECIAL_PLATFORM_TYPES.length)]);
+                
+                // Fill the rest with a mix of normal and all special types
+                const allAvailableTypes = ['normal', ...ALL_SPECIAL_PLATFORM_TYPES];
+                while (platformTypesForThisLevel.length < numPlatforms) {
+                    platformTypesForThisLevel.push(allAvailableTypes[Math.floor(Math.random() * allAvailableTypes.length)]);
+                }
+            }
+
+            // Shuffle the array to mix platform types throughout the level
+            shuffleArray(platformTypesForThisLevel);
+
             const maxY = canvas.height * 0.9;
             const minY = canvas.height * 0.15;
             const stepY = (maxY - minY) / numPlatforms;
@@ -481,26 +521,33 @@
                 const y = minY + i * stepY;
                 const direction = Math.random() > 0.5 ? 1 : -1;
                 
-                let platformType = 'normal';
-                let pColor1 = '#00008B';
-                let pColor2 = '#000066';
-                let platformSpeedFactor = (1.0 + Math.random() * 0.5);
+                const platformType = platformTypesForThisLevel[i];
+                let pColor1 = '#00008B'; // Default for normal
+                let pColor2 = '#000066'; // Default for normal
+                let isStatic = false; // Most platforms can move initially
+                let speedFactor = (1.0 + Math.random() * 0.5);
 
-                const typeRoll = Math.random();
-                if (typeRoll < 0.15 + (level * 0.01)) { // Chance for special platforms to increase with level
-                    platformType = 'disappearing';
-                    pColor1 = '#800080'; // Purple
-                    pColor2 = '#4B0082';
-                } else if (typeRoll < 0.3 + (level * 0.01)) {
-                    platformType = 'bouncy';
-                    pColor1 = '#32CD32'; // LimeGreen
-                    pColor2 = '#228B22';
-                    platformSpeedFactor = 0; // Bouncy platforms are usually static
-                } else if (typeRoll < 0.45 + (level * 0.01)) {
-                    platformType = 'conveyor';
-                    pColor1 = '#A9A9A9'; // DarkGrey
-                    pColor2 = '#696969';
-                    platformSpeedFactor = (1.0 + Math.random() * 0.5);
+                switch (platformType) {
+                    case 'normal':
+                        pColor1 = '#00008B'; pColor2 = '#000066';
+                        isStatic = false;
+                        break;
+                    case 'disappearing':
+                        pColor1 = '#800080'; // Purple
+                        pColor2 = '#4B0082';
+                        isStatic = false; // Disappearing platforms can also move
+                        break;
+                    case 'bouncy':
+                        pColor1 = '#32CD32'; // LimeGreen
+                        pColor2 = '#228B22';
+                        isStatic = true; // Bouncy platforms usually static
+                        speedFactor = 0; // Ensure static for bouncy platforms
+                        break;
+                    case 'conveyor':
+                        pColor1 = '#A9A9A9'; // DarkGrey
+                        pColor2 = '#696969';
+                        isStatic = false;
+                        break;
                 }
 
                 platforms.push({
@@ -510,19 +557,19 @@
                     height: 15,
                     color1: pColor1,
                     color2: pColor2,
-                    static: platformType === 'normal' || platformType === 'bouncy', // Conveyor and disappearing can still move
+                    static: isStatic,
                     direction,
-                    speed: platformBaseSpeed * platformSpeedFactor,
+                    speed: platformBaseSpeed * speedFactor,
                     type: platformType,
-                    originalColor1: pColor1,
+                    originalColor1: pColor1, // Store original colors for disappearing platforms
                     originalColor2: pColor2,
                     active: true, // For disappearing platforms
                     timer: 0, // For disappearing platforms
-                    reappearTime: 120 // Frames to wait before reappearing
+                    reappearTime: 180 // Frames to wait (e.g., 3 seconds) before reappearing
                 });
                 
-                // Add enemy to some platforms
-                if (Math.random() < 0.3 + (level * 0.05)) {
+                // Add enemy to some platforms (excluding bouncy for balance)
+                if (Math.random() < 0.3 + (level * 0.05) && platformType !== 'bouncy') {
                     enemies.push({
                         x: x + platforms[platforms.length - 1].width / 2,
                         y: y - 15,
@@ -544,7 +591,8 @@
                 color2: '#660000',
                 static: true,
                 deadly: true,
-                type: 'normal'
+                type: 'normal',
+                active: true, // Always active
             });
             
             // Add stars
@@ -559,36 +607,33 @@
                     starY = 20 + Math.random() * (maxStarY - 40);
                     valid = true;
                     for (const enemy of enemies) {
-                        const dx = starX - enemy.x;
-                        const dy = starY - enemy.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        if (distance < 30) { valid = false; break; }
+                        const dx = starX - enemy.x; const dy = starY - enemy.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < 30) { valid = false; break; }
                     }
-                    if (valid) {
-                        for (const platform of platforms) {
-                            if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
-                                starY + 10 > platform.y && starY - 10 < platform.y + platform.height) {
-                                valid = false;
-                                break;
-                            }
+                    if (!valid) continue;
+                    for (const platform of platforms) {
+                        if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
+                            starY + 10 > platform.y && starY - 10 < platform.y + platform.height) {
+                            valid = false;
+                            break;
                         }
                     }
                 }
                 stars.push({ x: starX, y: starY, radius: 15, scale: 1, collected: false });
             }
 
-            // Add power-ups randomly
-            const numPowerUps = Math.floor(Math.random() * 2); // 0 or 1 power-up per level
-            for (let i = 0; i < numPowerUps; i++) {
+            // Add power-ups randomly (controlled probability)
+            // Increased chance for power-ups in higher levels
+            const powerUpChance = 0.2 + (level * 0.02); // 20% + 2% per level
+            if (Math.random() < powerUpChance) {
                 let valid = false;
                 let puX, puY;
-                let puType = Math.random() < 0.5 ? 'invincible' : 'speed'; // Choose type randomly
+                let puType = Math.random() < 0.5 ? 'invincible' : 'speed'; 
                 
                 while (!valid) {
                     puX = 20 + Math.random() * (canvas.width - 40);
                     puY = 20 + Math.random() * (maxStarY - 40);
                     valid = true;
-                    // Check if power-up is not on top of existing entities
                     for (const enemy of enemies) {
                         const dx = puX - enemy.x; const dy = puY - enemy.y;
                         if (Math.sqrt(dx * dx + dy * dy) < 40) { valid = false; break; }
@@ -646,8 +691,8 @@
                     updatePlatforms();
                     updateEnemies();
                     updateStars();
-                    updatePowerUps(); // New
-                    updateParticles(); // New
+                    updatePowerUps();
+                    updateParticles();
                     checkExitPlatform();
                     break;
                 case 'paused':
@@ -688,7 +733,7 @@
 
             let currentSpeed = player.baseSpeed;
             if (player.speedBoost) {
-                currentSpeed *= 1.5; // 50% speed boost
+                currentSpeed *= 1.5;
                 player.speedBoostTimer--;
                 if (player.speedBoostTimer <= 0) {
                     player.speedBoost = false;
@@ -764,10 +809,8 @@
                         }
 
                         // Disappearing platform logic
-                        if (platform.type === 'disappearing') {
+                        if (platform.type === 'disappearing' && platform.timer === 0) { // Start timer only if not already started
                             platform.timer = 60; // Start disappearing timer (e.g., 1 second)
-                            platform.color1 = 'rgba(128,0,128,0.5)'; // Fade out
-                            platform.color2 = 'rgba(75,0,130,0.5)';
                         }
                         
                         // Check if deadly platform
@@ -790,7 +833,7 @@
                 if (distance < player.radius + enemy.size * 0.7 && !player.invincible && player.canTakeDamage) {
                     playerDie(false);
                     // Knockback player away from enemy
-                    player.vx = dx > 0 ? 5 : -5;
+                    player.vx = (dx > 0 ? 1 : -1) * 5;
                     player.vy = -3;
                 }
             }
@@ -802,11 +845,12 @@
                 }
             }
 
-            // Update invincible timer (for visual effect)
+            // Update invincible timer 
             if (player.invincibleTimer > 0) {
                 player.invincibleTimer--;
                 if (player.invincibleTimer <= 0) {
                     player.invincible = false;
+                    player.canTakeDamage = true; // Re-enable damage after invincibility
                 }
             }
         }
@@ -830,8 +874,7 @@
                         platform.active = false;
                         setTimeout(() => {
                             platform.active = true;
-                            platform.color1 = platform.originalColor1;
-                            platform.color2 = platform.originalColor2;
+                            platform.timer = 0; // Reset timer for next use
                         }, platform.reappearTime * 10); // Reappear after a delay
                     }
                 }
@@ -846,7 +889,6 @@
                 enemy.x += enemy.direction * enemy.speed;
 
                 // Reverse enemy direction if it hits platform edges
-                // Enemies patrol within their platform's width, slightly offset
                 const patrolMargin = 10;
                 if (enemy.x - enemy.size < platform.x + patrolMargin || enemy.x + enemy.size > platform.x + platform.width - patrolMargin) {
                     enemy.direction *= -1;
@@ -890,7 +932,8 @@
                     color1: '#006400',
                     color2: '#004d00',
                     static: true,
-                    type: 'normal' // ensure type is defined for consistency
+                    type: 'normal',
+                    active: true,
                 };
             }
         }
@@ -898,7 +941,7 @@
         function updatePowerUps() {
             for (let i = powerUps.length - 1; i >= 0; i--) {
                 const powerUp = powerUps[i];
-                powerUp.update(); // Update floating animation
+                powerUp.update();
 
                 if (powerUp.collected) continue;
 
@@ -909,25 +952,19 @@
                 if (distance < player.radius + powerUp.radius) {
                     powerUp.collected = true;
                     playPowerUpSound();
-                    score += 2; // Bonus points for power-up
+                    score += 2;
 
-                    // Apply power-up effect
                     switch (powerUp.type) {
                         case 'invincible':
                             player.invincible = true;
-                            player.invincibleTimer = 300; // 5 seconds (60 frames/sec * 5)
-                            player.canTakeDamage = false; // Override normal damage cooldown
-                            clearTimeout(player.damageCooldownTimeout); // Clear previous timeout
-                            player.damageCooldownTimeout = setTimeout(() => { // Re-enable damage after invincibility
-                                player.canTakeDamage = true;
-                            }, player.invincibleTimer * (1000/60)); // Convert frames to ms
+                            player.invincibleTimer = 300; 
+                            player.canTakeDamage = false; 
                             break;
                         case 'speed':
                             player.speedBoost = true;
-                            player.speedBoostTimer = 300; // 5 seconds
+                            player.speedBoostTimer = 300; 
                             break;
                     }
-                    // Remove power-up visually after collection
                     powerUps.splice(i, 1);
                 }
             }
@@ -948,15 +985,15 @@
             
             player.lives--;
             player.canTakeDamage = false;
-            // Clear any existing damage cooldown timeout and invincibility timer
             clearTimeout(player.damageCooldownTimeout); 
             player.invincible = false; 
             player.invincibleTimer = 0;
+            player.speedBoost = false;
+            player.speedBoostTimer = 0;
             
-            // Set a new invulnerability period *after* taking damage
             player.damageCooldownTimeout = setTimeout(() => {
                 player.canTakeDamage = true;
-            }, 1000); // 1-second invulnerability after respawn/hit
+            }, 1000); 
             
             if (player.lives <= 0) {
                 gameOverFinalScore = score;
@@ -1022,14 +1059,79 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
+        // New function to draw platforms with type-specific visuals
+        function drawPlatform(platform) {
+            let currentAlpha = 1;
+            let currentColor1 = platform.originalColor1 || platform.color1; // Use original if available
+            let currentColor2 = platform.originalColor2 || platform.color2;
+
+            if (platform.type === 'disappearing' && platform.timer > 0) {
+                currentAlpha = platform.timer / 60; // Fades out over 60 frames
+                if (currentAlpha < 0.1) currentAlpha = 0.1; // Don't go fully transparent immediately
+                
+                // Convert hex colors to RGB for alpha adjustment
+                const hexToRgb = (hex) => {
+                    const r = parseInt(hex.slice(1, 3), 16);
+                    const g = parseInt(hex.slice(3, 5), 16);
+                    const b = parseInt(hex.slice(5, 7), 16);
+                    return { r, g, b };
+                };
+                const rgb1 = hexToRgb(platform.originalColor1);
+                const rgb2 = hexToRgb(platform.originalColor2);
+
+                currentColor1 = `rgba(${rgb1.r},${rgb1.g},${rgb1.b},${currentAlpha})`;
+                currentColor2 = `rgba(${rgb2.r},${rgb2.g},${rgb2.b},${currentAlpha})`;
+            }
+
+            // Only draw if active (not fully disappeared)
+            if (!platform.active && platform.type === 'disappearing' && platform.timer <= 0) {
+                return;
+            }
+
+            ctx.save();
+            ctx.globalAlpha = currentAlpha;
+            
+            drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, currentColor1, currentColor2);
+
+            ctx.restore(); // Restore alpha for subsequent draws
+
+            // Draw conveyor arrows
+            if (platform.type === 'conveyor') {
+                ctx.fillStyle = 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                const arrowSize = 5;
+                // Adjust arrow frequency based on platform width
+                const numArrows = Math.max(2, Math.floor(platform.width / 25)); 
+                const arrowSpacing = platform.width / (numArrows + 1);
+
+                for (let i = 0; i < numArrows; i++) {
+                    const arrowX = platform.x + (i + 1) * arrowSpacing;
+                    const arrowY = platform.y + platform.height / 2;
+
+                    ctx.beginPath();
+                    if (platform.direction === 1) { // Right arrow
+                        ctx.moveTo(arrowX - arrowSize, arrowY - arrowSize);
+                        ctx.lineTo(arrowX + arrowSize, arrowY);
+                        ctx.lineTo(arrowX - arrowSize, arrowY + arrowSize);
+                    } else { // Left arrow
+                        ctx.moveTo(arrowX + arrowSize, arrowY - arrowSize);
+                        ctx.lineTo(arrowX - arrowSize, arrowY);
+                        ctx.lineTo(arrowX + arrowSize, arrowY + arrowSize);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+        }
+
         function drawGameElements() {
             drawBackground();
             
-            // Draw platforms
+            // Draw platforms using the new helper
             for (const platform of platforms) {
-                if (platform.active) { // Only draw if active
-                    drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
-                }
+                drawPlatform(platform);
             }
             
             // Draw exit platform
@@ -1065,9 +1167,10 @@
             // Draw player (with invincibility flash)
             let playerColor1 = '#FFFFFF';
             let playerColor2 = '#87CEEB';
-            if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 5) % 2 === 0) { // Flash effect
-                playerColor1 = '#FFD700'; // Gold flash
-                playerColor2 = '#FF4500'; // Orange-red flash
+            // Flashing logic for invincibility (both power-up and damage cooldown)
+            if ((player.invincibleTimer > 0 || !player.canTakeDamage) && Math.floor(Date.now() / 100) % 2 === 0) { // Flash every 100ms
+                playerColor1 = '#FFD700'; 
+                playerColor2 = '#FF4500'; 
             }
             drawCircleWithGradient(player.x, player.y, player.radius, playerColor1, playerColor2, player.scale);
 
@@ -1124,11 +1227,13 @@
             ctx.fillText("Collect all stars to find the EXIT!", canvas.width / 2, canvas.height / 2 + 100);
             ctx.strokeText("P / ESC: Pause Game", canvas.width / 2, canvas.height / 2 + 130);
             ctx.fillText("P / ESC: Pause Game", canvas.width / 2, canvas.height / 2 + 130);
+            ctx.strokeText("High Score: " + highScore, canvas.width / 2, canvas.height / 2 + 160);
+            ctx.fillText("High Score: " + highScore, canvas.width / 2, canvas.height / 2 + 160);
         }
 
         function drawPausedScreen() {
-            drawGameElements(); // Draw game underneath
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark overlay
+            drawGameElements();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             drawScreenMessage("PAUSED", "Press P or ESC to Resume", 'yellow', 'white', 40, 25);
         }
@@ -1195,7 +1300,8 @@
             transitionCallback = null;
             playerCanMove = true;
 
-            particles = []; // Clear particles on reset
+            particles = []; 
+            powerUps = []; // Clear power-ups on reset
             startMusic(); 
         }
         

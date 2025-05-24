@@ -679,7 +679,7 @@
                 let starX, starY;
                 while (!valid) {
                     starX = 20 + Math.random() * (canvas.width - 40);
-                    starY = 20 + Math.random() * (maxStarY - 40);
+                    starY = 30 + Math.random() * (maxStarY - 20);
                     valid = true;
                     for (const enemy of enemies) {
                         const dx = starX - enemy.x; const dy = starY - enemy.y;

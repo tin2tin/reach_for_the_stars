@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Platform Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #222;
+            overflow: hidden; /* Prevent scrolling due to full height canvas */
+        }
+        canvas {
+            border: 2px solid #333;
+            display: block; /* Remove extra space below canvas */
+        }
+        #restart {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background: linear-gradient(to bottom, #ff6b6b, #c44d4d);
+            border: 2px solid black;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            z-index: 100; /* Ensure button is on top */
+        }
+        #audioToggle {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 5px 10px;
+            background: linear-gradient(to bottom, #6bff6b, #4dc44d);
+            border: 2px solid black;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <button id="restart">Restart</button>
+    <button id="audioToggle">Unmute Audio</button> <!-- Initial state is 'Unmute' -->
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // --- Canvas Size Adjustment ---
+        canvas.width = window.innerWidth * 0.6; // 60% of width
+        canvas.height = window.innerHeight;     // Full height
+        
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth * 0.6;
+            canvas.height = window.innerHeight;
+            // Game loop will automatically redraw with new dimensions
+        });
+        
+        const keys = {};
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
+        document.getElementById('restart').addEventListener('click', resetGame);
+        
+        // --- Audio Context and Sounds ---
+        let audioContext;
+        let isAudioEnabled = false;
+        let bgMusicSource = null; // Reference to the background music oscillator
+
+        const audioToggleBtn = document.getElementById('audioToggle');
+        audioToggleBtn.addEventListener('click', toggleAudio);
+
+        // Initializes the AudioContext on first user interaction
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        // Toggles audio on/off
+        function toggleAudio() {
+            initAudioContext(); // Ensure context is initialized
+            isAudioEnabled = !isAudioEnabled;
+            if (isAudioEnabled) {
+                audioToggleBtn.textContent = 'Mute Audio';
+                if (gameState === 'playing') {
+                    playBgMusic();
+                }
+            } else {
+                audioToggleBtn.textContent = 'Unmute Audio';
+                stopBgMusic();
+            }
+        }
+
+        // Helper for drawing text with black outline and white fill
+        function drawOutlinedText(text, x, y, font, fillStyle, strokeStyle, lineWidth) {
+            ctx.font = font;
+            ctx.strokeStyle = strokeStyle;
+            ctx.lineWidth = lineWidth;
+            ctx.strokeText(text, x, y); // Draw outline first
+            ctx.fillStyle = fillStyle;
+            ctx.fillText(text, x, y);   // Then fill
+        }
+
+        // Generic tone generator
+        function playTone(frequency, duration, type = 'sine', gainValue = 0.1) {
+            if (!isAudioEnabled || !audioContext) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+
+            // Fade out
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // Frequency sweep generator (for jump, die, star collect)
+        function playSweep(startFreq, endFreq, duration, type = 'sine', gainValue = 0.1) {
+            if (!isAudioEnabled || !audioContext) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = type;
+            gainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+            
+            oscillator.frequency.setValueAtTime(startFreq, audioContext.currentTime);
+            oscillator.frequency.linearRampToValueAtTime(endFreq, audioContext.currentTime + duration);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // Noise generator (for die sound)
+        function playNoise(duration, gainValue = 0.05) {
+            if (!isAudioEnabled || !audioContext) return;
+            const bufferSize = audioContext.sampleRate * duration;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const output = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1; // White noise
+            }
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            const gainNode = audioContext.createGain();
+            gainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            source.start();
+            source.stop(audioContext.currentTime + duration);
+        }
+
+        // --- Specific Sound Effects ---
+        function playJumpSound() {
+            playSweep(440, 880, 0.15, 'sine', 0.15); // Upward sweep
+        }
+
+        function playLandSound() {
+            playTone(100, 0.1, 'square', 0.1); // Short, low thud
+        }
+
+        function playStarCollectSound() {
+            playSweep(1000, 2000, 0.1, 'triangle', 0.1); // Quick high chime
+        }
+
+        function playDieSound() {
+            playSweep(300, 50, 0.4, 'sawtooth', 0.2); // Descending, ominous
+            playNoise(0.3, 0.1); // Add some crackle
+        }
+
+        function playLevelCompleteSound() {
+            if (!isAudioEnabled || !audioContext) return;
+            const now = audioContext.currentTime;
+            const gainValue = 0.1;
+            const notes = [
+                { freq: 523.25, dur: 0.15 }, // C5
+                { freq: 659.25, dur: 0.15 }, // E5
+                { freq: 783.99, dur: 0.25 }  // G5
+            ];
+            let time = now;
+            notes.forEach(note => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(note.freq, time);
+                gainNode.gain.setValueAtTime(gainValue, time);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, time + note.dur);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.start(time);
+                oscillator.stop(time + note.dur);
+                time += note.dur + 0.05; // Small pause between notes
+            });
+        }
+
+        function playGameOverSound() {
+            if (!isAudioEnabled || !audioContext) return;
+            const now = audioContext.currentTime;
+            const gainValue = 0.15;
+            const notes = [
+                { freq: 391.99, dur: 0.3 }, // G4
+                { freq: 329.63, dur: 0.3 }, // E4
+                { freq: 261.63, dur: 0.5 }  // C4
+            ];
+            let time = now;
+            notes.forEach(note => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(note.freq, time);
+                gainNode.gain.setValueAtTime(gainValue, time);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, time + note.dur);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.start(time);
+                oscillator.stop(time + note.dur);
+                time += note.dur + 0.05;
+            });
+        }
+
+        // --- Background Music ---
+        function playBgMusic() {
+            if (!isAudioEnabled || !audioContext) return;
+            stopBgMusic(); // Stop any existing music first
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(110, audioContext.currentTime); // A2 ambient drone
+            gainNode.gain.setValueAtTime(0.02, audioContext.currentTime); // Low volume
+
+            // Apply a low-pass filter for a mellow background feel
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(800, audioContext.currentTime); 
+            filter.Q.setValueAtTime(1, audioContext.currentTime); 
+
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            oscillator.loop = true; // Make it loop indefinitely
+            bgMusicSource = oscillator; // Store reference to stop later
+        }
+
+        function stopBgMusic() {
+            if (bgMusicSource) {
+                bgMusicSource.stop();
+                bgMusicSource = null;
+            }
+        }
+
+
+        let player = {
+            x: 50,
+            y: 50,
+            radius: 15,
+            vx: 0,
+            vy: 0,
+            onGround: false,
+            lives: 3,
+            scale: 1,
+            justLanded: false // Added to track landing for sound
+        };
+        
+        let platforms = [];
+        let enemies = [];
+        let stars = [];
+        let exitPlatform = null;
+        let score = 0;
+        let level = 1;
+        let gameState = 'playing';
+        let platformSpeed = 0.5;
+        let backgroundColors = [];
+        
+        function generateBackgroundColors() {
+            backgroundColors = [];
+            switch (level % 5) {
+                case 1: // Night dawn
+                    backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c'];
+                    break;
+                case 2: // Morning
+                    backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];
+                    break;
+                case 3: // Afternoon
+                    backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6'];
+                    break;
+                case 4: // Evening
+                    backgroundColors = ['#ff9966', '#ff5e62', '#c84e89'];
+                    break;
+                case 0: // Night
+                    backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
+                    break;
+            }
+        }
+        
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            backgroundColors.forEach((color, index) => {
+                gradient.addColorStop(index / (backgroundColors.length - 1), color);
+            });
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        function drawCircleWithGradient(x, y, radius, color1, color2, scale = 1) {
+            ctx.beginPath();
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * scale);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.arc(x, y, radius * scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function drawRectWithGradient(x, y, width, height, color1, color2) {
+            const centerX = x + width / 2;
+            const centerY = y + height / 2;
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, width / 2);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, y, width, height);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, width, height);
+        }
+        
+        function drawTriangleWithGradient(x, y, size, color1, color2) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - size);
+            ctx.lineTo(x - size, y + size);
+            ctx.lineTo(x + size, y + size);
+            ctx.closePath();
+            
+            const centerX = x;
+            const centerY = y;
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function drawStarWithGradient(x, y, radius, spikes, color1, color2, scale = 1) {
+            let rot = Math.PI / 2 * 3;
+            let cx = x;
+            let cy = y;
+            let step = Math.PI / spikes;
+            
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(rot) * radius * scale, cy + Math.sin(rot) * radius * scale);
+            
+            for (let i = 0; i < spikes; i++) {
+                rot += step;
+                let x = cx + Math.cos(rot) * radius * scale * 0.4;
+                let y = cy + Math.sin(rot) * radius * scale * 0.4;
+                ctx.lineTo(x, y);
+                rot += step;
+                x = cx + Math.cos(rot) * radius * scale;
+                y = cy + Math.sin(rot) * radius * scale;
+                ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            
+            const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * scale);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function initLevel() {
+            platforms = [];
+            enemies = [];
+            stars = [];
+            exitPlatform = null;
+            generateBackgroundColors();
+            
+            // Starting platform
+            platforms.push({
+                x: 20,
+                y: 80,
+                width: 100,
+                height: 20,
+                color1: '#006400',
+                color2: '#004d00',
+                static: true
+            });
+            
+            // Moving platforms
+            const numPlatforms = 8 + Math.floor(Math.random() * 4);
+            const maxY = canvas.height * 0.9;
+            const minY = 120;
+            const stepY = (maxY - minY) / numPlatforms;
+            
+            for (let i = 0; i < numPlatforms; i++) {
+                const width = 70 + Math.random() * 150;
+                const x = Math.random() * (canvas.width - width);
+                const y = minY + i * stepY;
+                const direction = Math.random() > 0.5 ? 1 : -1;
+                
+                platforms.push({
+                    x,
+                    y,
+                    width,
+                    height: 15,
+                    color1: '#00008B',
+                    color2: '#000066',
+                    static: false,
+                    direction,
+                    speed: platformSpeed * (0.8 + Math.random() * 0.4)
+                });
+                
+                // Add enemy to some platforms
+                if (Math.random() < 0.3) {
+                    enemies.push({
+                        x: x + width / 2,
+                        y: y - 15,
+                        size: 12,
+                        platformIndex: platforms.length - 1
+                    });
+                }
+            }
+            
+            // Red gutter platform (deadly)
+            platforms.push({
+                x: 0,
+                y: canvas.height - 20,
+                width: canvas.width,
+                height: 20,
+                color1: '#8B0000',
+                color2: '#660000',
+                static: true,
+                deadly: true
+            });
+            
+            // Add stars
+            const numStars = 5 + level;
+            const maxStarY = canvas.height * 2/3;
+            
+            for (let i = 0; i < numStars; i++) {
+                let valid = false;
+                let starX, starY;
+                
+                while (!valid) {
+                    starX = 20 + Math.random() * (canvas.width - 40);
+                    starY = 20 + Math.random() * (maxStarY - 40);
+                    valid = true;
+                    
+                    // Check if star is not on top of an enemy
+                    for (const enemy of enemies) {
+                        const dx = starX - enemy.x;
+                        const dy = starY - enemy.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < 30) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                }
+                
+                stars.push({
+                    x: starX,
+                    y: starY,
+                    radius: 15,
+                    scale: 1,
+                    collected: false
+                });
+            }
+            
+            // Reset player position
+            player.x = 50;
+            player.y = 50;
+            player.vx = 0;
+            player.vy = 0;
+            player.scale = 1;
+            player.onGround = false; // Player starts in air until landing
+            playBgMusic(); // Start background music for the level
+        }
+        
+        function update() {
+            if (gameState === 'playing') {
+                updatePlayer();
+                updatePlatforms();
+                updateEnemies();
+                updateStars();
+                checkExitPlatform();
+            } else if (gameState === 'levelComplete' && keys[' ']) {
+                level++;
+                platformSpeed += 0.1;
+                gameState = 'playing';
+                initLevel();
+                playBgMusic(); // Restart music for new level
+            } else if (gameState === 'gameOver' && keys[' ']) {
+                resetGame();
+            }
+        }
+        
+        function updatePlayer() {
+            // Horizontal movement
+            if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.2, -3);
+            else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.2, 3);
+            else player.vx *= 0.9;
+            
+            player.x += player.vx;
+            
+            // Jumping
+            const wasOnGround = player.onGround; // Track previous ground state
+            player.onGround = false; // Reset for current frame
+
+            if (keys[' '] && wasOnGround) {
+                player.vy = -7;
+                playJumpSound(); // Play jump sound
+            }
+            
+            // Gravity
+            player.vy += 0.3;
+            player.y += player.vy;
+            
+            // Boundary check
+            if (player.x < player.radius) {
+                player.x = player.radius;
+                player.vx = 0;
+            }
+            if (player.x > canvas.width - player.radius) {
+                player.x = canvas.width - player.radius;
+                player.vx = 0;
+            }
+            
+            // Platform collision
+            player.justLanded = false; // Reset land flag for current frame
+
+            for (const platform of platforms) {
+                if (player.y + player.radius > platform.y && 
+                    player.y - player.radius < platform.y + platform.height &&
+                    player.x + player.radius > platform.x && 
+                    player.x - player.radius < platform.x + platform.width) {
+                    
+                    // Top collision (landing)
+                    if (player.vy > 0 && player.y < platform.y) {
+                        player.y = platform.y - player.radius;
+                        player.vy = -player.vy * 0.2; // Small bounce
+                        player.onGround = true;
+                        
+                        if (!wasOnGround) { // If player just landed (was in air, now on ground)
+                            player.justLanded = true;
+                            playLandSound();
+                        }
+
+                        // Squeeze animation
+                        player.scale = 0.9;
+                        setTimeout(() => player.scale = 1, 100);
+                        
+                        // Move with platform
+                        if (!platform.static) {
+                            player.x += platform.direction * platform.speed;
+                        }
+                        
+                        // Check if deadly platform
+                        if (platform.deadly) {
+                            playerDie();
+                        }
+                    }
+                }
+            }
+            
+            // Enemy collision
+            for (const enemy of enemies) {
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < player.radius + enemy.size) {
+                    playerDie();
+                }
+            }
+            
+            // Fall off screen
+            if (player.y > canvas.height + 50) {
+                playerDie();
+            }
+        }
+        
+        function updatePlatforms() {
+            for (let i = 0; i < platforms.length; i++) {
+                const platform = platforms[i];
+                if (!platform.static) {
+                    platform.x += platform.direction * platform.speed;
+                    
+                    // Reverse direction at edges
+                    if (platform.x <= 0 || platform.x + platform.width >= canvas.width) {
+                        platform.direction *= -1;
+                    }
+                }
+            }
+        }
+        
+        function updateEnemies() {
+            for (const enemy of enemies) {
+                const platform = platforms[enemy.platformIndex];
+                // Ensure the platform still exists (in case it was removed or index invalid)
+                if (platform) { 
+                    enemy.x = platform.x + platform.width / 2;
+                }
+            }
+        }
+        
+        function updateStars() {
+            let allCollected = true;
+            
+            for (let i = 0; i < stars.length; i++) {
+                const star = stars[i];
+                
+                if (!star.collected) {
+                    allCollected = false;
+                    
+                    const dx = player.x - star.x;
+                    const dy = player.y - star.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < player.radius + star.radius * star.scale * 0.7) {
+                        star.collected = true;
+                        score += 1;
+                        playStarCollectSound(); // Play star collect sound
+                        
+                        // Animate star collection
+                        (function animateStar(starIndex, scaleValue) {
+                            stars[starIndex].scale = scaleValue;
+                            if (scaleValue > 0.1) {
+                                requestAnimationFrame(() => animateStar(starIndex, scaleValue - 0.1));
+                            }
+                        })(i, 1);
+                    }
+                }
+            }
+            
+            if (allCollected && !exitPlatform) {
+                // Ensure exit platform is generated at a reasonable height
+                const idealExitY = canvas.height - 80;
+                let lowestNormalPlatformY = 0;
+                for (const platform of platforms) {
+                    if (!platform.deadly && platform.y > lowestNormalPlatformY) {
+                        lowestNormalPlatformY = platform.y;
+                    }
+                }
+                // Place exit platform at least 30px above the lowest normal platform
+                const exitPlatformY = Math.max(idealExitY, lowestNormalPlatformY + 30);
+
+                exitPlatform = {
+                    x: canvas.width - 120,
+                    y: exitPlatformY,
+                    width: 100,
+                    height: 20,
+                    color1: '#006400',
+                    color2: '#004d00',
+                    static: true
+                };
+            }
+        }
+        
+        function playerDie() {
+            playDieSound(); // Play die sound
+            player.lives--;
+            stopBgMusic(); // Stop music on death
+
+            if (player.lives <= 0) {
+                gameState = 'gameOver';
+                playGameOverSound(); // Play game over sound
+            } else {
+                // Animate player shrinking on losing a life
+                (function animatePlayerDeath(scale) {
+                    player.scale = scale;
+                    if (scale > 0.1) {
+                        requestAnimationFrame(() => animatePlayerDeath(scale - 0.1));
+                    } else {
+                        // Reset player after animation
+                        player.x = 50;
+                        player.y = 50;
+                        player.vx = 0;
+                        player.vy = 0;
+                        player.scale = 1; // Restore scale
+                    }
+                })(1);
+            }
+        }
+        
+        function checkExitPlatform() {
+            if (exitPlatform) {
+                if (player.y + player.radius > exitPlatform.y && 
+                    player.y - player.radius < exitPlatform.y + exitPlatform.height &&
+                    player.x + player.radius > exitPlatform.x && 
+                    player.x - player.radius < exitPlatform.x + exitPlatform.width) {
+                    
+                    if (gameState === 'playing') { // Only trigger if currently playing
+                        gameState = 'levelComplete';
+                        score += 5; // 5 points for completing level
+                        stopBgMusic(); // Stop music for level complete jingle
+                        playLevelCompleteSound(); // Play level complete sound
+                    }
+                }
+            }
+        }
+        
+        function draw() {
+            drawBackground();
+            
+            // Draw platforms
+            for (const platform of platforms) {
+                drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
+            }
+            
+            // Draw exit platform
+            if (exitPlatform) {
+                drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
+                
+                ctx.textAlign = 'center';
+                drawOutlinedText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 5, 'bold 16px Arial', 'yellow', 'black', 3);
+            }
+            
+            // Draw stars
+            for (const star of stars) {
+                if (!star.collected) {
+                    drawStarWithGradient(star.x, star.y, star.radius, 5, '#FFFF00', '#FFD700', star.scale);
+                }
+            }
+            
+            // Draw enemies
+            for (const enemy of enemies) {
+                drawTriangleWithGradient(enemy.x, enemy.y, enemy.size, '#FF0000', '#8B0000');
+            }
+            
+            // Draw player
+            drawCircleWithGradient(player.x, player.y, player.radius, '#FFFFFF', '#87CEEB', player.scale);
+            
+            // Draw UI
+            ctx.textAlign = 'left';
+            drawOutlinedText(`Score: ${score}`, 10, 20, '16px Arial', 'white', 'black', 2);
+            drawOutlinedText(`Level: ${level}`, 10, 40, '16px Arial', 'white', 'black', 2);
+            drawOutlinedText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 60, '16px Arial', 'white', 'black', 2);
+            
+            // Draw game state messages
+            if (gameState === 'levelComplete') {
+                ctx.textAlign = 'center';
+                drawOutlinedText(`Get ready for level: ${level + 1}`, canvas.width / 2, canvas.height / 2, '24px Arial', 'white', 'black', 3);
+                drawOutlinedText('Press SPACE to continue', canvas.width / 2, canvas.height / 2 + 30, '24px Arial', 'white', 'black', 3);
+            } else if (gameState === 'gameOver') {
+                ctx.textAlign = 'center';
+                drawOutlinedText('GAME OVER', canvas.width / 2, canvas.height / 2, '32px Arial', 'red', 'black', 4);
+                drawOutlinedText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 40, '32px Arial', 'white', 'black', 4);
+            }
+        }
+        
+        function resetGame() {
+            player.lives = 3;
+            score = 0;
+            level = 1;
+            platformSpeed = 0.5;
+            gameState = 'playing';
+            initLevel();
+            // Music starts again in initLevel()
+        }
+        
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Initial setup
+        initLevel();
+        gameLoop();
+
+        // Autoplay policy workaround: initialize AudioContext and start music on first user click
+        document.addEventListener('click', () => {
+            if (!audioContext) {
+                initAudioContext();
+            }
+            if (!isAudioEnabled) { // If audio was not enabled by toggle, enable it now
+                isAudioEnabled = true;
+                audioToggleBtn.textContent = 'Mute Audio';
+                if (gameState === 'playing') {
+                    playBgMusic();
+                }
+            }
+        }, { once: true }); // This listener will only fire once
+    </script>
+</body>
+</html>

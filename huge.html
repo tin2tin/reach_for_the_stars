@@ -703,7 +703,8 @@
             
             // Reset player position - **CORRECTED INITIAL PLACEMENT**
             player.x = 50;
-            player.y = platforms[0].y - player.radius; // Snap directly to platform top
+            player.y = platforms[0].y - player.radius - 5;
+            // player.y = platforms[0].y - player.radius; // Snap directly to platform top
             player.vx = 0;
             player.vy = 0; // No initial vertical velocity
             player.scale = 1;

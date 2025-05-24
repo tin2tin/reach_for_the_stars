@@ -1,0 +1,22 @@
+https://huggingface.co/spaces/openfree/Vibe-Game
+
+do a platform game, with a gradient night dawn sky as background. 
+
+The round white and light blue player will start at a static dark green platform in the top left corner, the player can be slowly moved with arrow keys left and right and do small slow jumps with space bar. 
+
+The score is the total number of stars picked up + 5 points for each level.
+
+Draw all elements as gradients from the center, except the background. Give all elements a black outline. 
+
+All other platforms (dark blue) with variated lengths (some very long), should be slowly moving from side to side, they should be distributed so the y distance between the platforms are no higher than the jump height, the player should be able to land on the platforms (with a small bounce up and down with a tiny squeeze animation on impact), and the player and the triangular red enemies (only few) must move with the platforms when in contact.
+   
+In the bottom there will be a red gutter platform in full width which will always kill the player.
+
+The yellow star shaped pickups are static, stars can only be inserted in the upper 2/3 of the screen and never on top of an enemy. When a star is picked, animate the size down till it disappears. 
+
+The player has 3 lives to pick up all stars. When all stars have been collected, a dark green colored static platform in the lower right corner will appear with the yellow text "EXIT". When the player lands on this platform, reset the scene, but not the lives. For each new level make the platforms move a tiny bit faster, and make a new background gradient variation mimicking a different time of day. Write: "Get ready for level:", number, line break, and wait for spacebar input. Then remove the text.  
+
+When the player is out of lives, write "GAME OVER" and line break. And wait for the user to press spacebar, then reset everything. 
+
+Do not do a pop-up when dying, instead animate the player gradually smaller until invisible and then let the player start again.
+

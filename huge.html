@@ -583,35 +583,23 @@
             exitPlatform = null;
             generateBackgroundColors();
             
-            // Green starting platform (now much lower)
+            // Green starting platform - Adjusted Y to be clearly visible in the top-left corner
             platforms.push({
                 x: 20,
-                y: canvas.height - 150, // Placed 150px from the bottom
+                y: 50, // Fixed pixel value from top for better control
                 width: 100,
                 height: 20,
                 color1: '#006400', 
                 color2: '#004d00', 
                 static: true,
-                type: 'normal', 
+                type: 'normal',
                 active: true
             });
             
             const numDynamicPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
-            
-            // Dynamic platforms should be generated *above* the starting platform
-            const minDynamicY = 50; // Max Y for dynamic platforms (near the top)
-            const maxDynamicY = platforms[0].y - platforms[0].height - 50; // Max Y for dynamic platforms (must be above starting platform with buffer)
-            
-            // Ensure there's enough vertical space for dynamic platforms
-            if (maxDynamicY <= minDynamicY + 50) { // Small buffer for at least one platform + gap
-                // Fallback: If not enough space, simply set a default range or reduce platform count
-                // For a typical canvas, this shouldn't be an issue.
-                console.warn("Limited vertical space for dynamic platforms. Adjusting generation range.");
-                // As a robust fallback, you might cap numDynamicPlatforms or ensure minDynamicY < maxDynamicY.
-                // For now, if it's too tight, platforms might overlap or be very compressed.
-            }
-
-            const verticalGap = (maxDynamicY - minDynamicY) / (numDynamicPlatforms + 1);
+            const maxY = canvas.height * 0.9; // Max Y for platforms
+            const minY = platforms[0].y + platforms[0].height + 50; // Min Y for platforms, below starting platform
+            const verticalGap = (maxY - minY) / (numDynamicPlatforms + 1);
 
             let dynamicPlatformConfigs = [];
 
@@ -647,8 +635,7 @@
                 }
 
                 const width = 70 + Math.random() * 150;
-                // Place dynamic platforms from minDynamicY upwards towards maxDynamicY
-                const y = minDynamicY + (i + 1) * verticalGap; 
+                const y = minY + (i + 1) * verticalGap;
                 const x = Math.random() * (canvas.width - width);
 
                 dynamicPlatformConfigs.push({
@@ -671,7 +658,7 @@
                 }
 
                 const width = 70 + Math.random() * 150;
-                const y = minDynamicY + Math.random() * (maxDynamicY - minDynamicY); 
+                const y = minY + Math.random() * (maxY - minY); 
                 const x = Math.random() * (canvas.width - width);
 
                 dynamicPlatformConfigs.push({
@@ -682,7 +669,7 @@
                 });
             }
 
-            dynamicPlatformConfigs.sort((a, b) => a.y - b.y); // Sort by Y ascending to build upwards
+            dynamicPlatformConfigs.sort((a, b) => a.y - b.y);
             dynamicPlatformConfigs.forEach(config => platforms.push(config));
 
             platforms.push({
@@ -707,7 +694,7 @@
             
             const numStars = 5 + level;
             const starRadius = 15;
-            const maxStarY = canvas.height * 2/3; // Stars can still be generated high up
+            const maxStarY = canvas.height * 2/3;
             
             for (let i = 0; i < numStars; i++) {
                 let attempts = 0; // To prevent infinite loops
@@ -727,9 +714,9 @@
                 }
             }
             
-            // Reset player position to the new, lower starting platform
-            player.x = platforms[0].x + platforms[0].width / 2; // Center player on the start platform
-            player.y = platforms[0].y - player.radius - 5; 
+            // Reset player position
+            player.x = 50;
+            player.y = platforms[0].y - player.radius; 
             player.vx = 0;
             player.vy = 0; // Ensure no initial velocity
             player.scale = 1;
@@ -1096,8 +1083,8 @@
                 playerCanMove = false;
                 gameState = 'transitioning';
                 transitionCallback = () => {
-                    // Player spawns directly on the first platform (which is now lower)
-                    player.x = platforms[0].x + platforms[0].width / 2;
+                    player.x = 50;
+                    // Player spawns directly on the first platform
                     player.y = platforms[0].y - player.radius; 
                     player.vx = 0;
                     player.vy = 0; // Ensure no initial velocity
@@ -1230,21 +1217,6 @@
 
         function drawStartScreen() {
             drawBackground();
-            
-            // Draw the first platform (the green starting one)
-            if (platforms.length > 0) {
-                const startPlatform = platforms[0];
-                drawRectWithGradient(startPlatform.x, startPlatform.y, startPlatform.width, startPlatform.height, startPlatform.color1, startPlatform.color2);
-            }
-
-            // Draw player on the starting platform
-            let playerColor1 = '#FFFFFF';
-            let playerColor2 = '#87CEEB';
-            drawCircleWithGradient(player.x, player.y, player.radius, playerColor1, playerColor2, player.scale);
-            
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent overlay for text readability
-            ctx.fillRect(0, 0, canvas.width, canvas.height); // Cover the elements drawn above
-            
             drawScreenMessage("REACH FOR THE STARS", "Press SPACE to Start", 'cyan', 'white', 40, 25);
             ctx.font = 'bold 18px Arial';
             ctx.lineWidth = 2;

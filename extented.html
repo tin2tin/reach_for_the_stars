@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Platform Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #222;
+            overflow: hidden;
+            flex-direction: column; /* To stack canvas and buttons vertically */
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #000; /* Fallback for transparency issues if any */
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px; /* Space between buttons */
+            z-index: 10; /* Ensure buttons are above canvas */
+        }
+        .control-button {
+            padding: 5px 10px;
+            background: linear-gradient(to bottom, #ff6b6b, #c44d4d);
+            border: 2px solid black;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-family: sans-serif; /* Consistent font */
+            font-size: 14px;
+            white-space: nowrap; /* Prevent text wrapping */
+        }
+        .control-button:hover {
+            background: linear-gradient(to bottom, #ff4e4e, #a93c3c);
+        }
+        .control-button:active {
+            background: linear-gradient(to bottom, #c44d4d, #ff6b6b);
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button id="restart" class="control-button">Restart Game</button>
+        <button id="mute-button" class="control-button">Mute Music</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // --- Canvas Size ---
+        // Use full height and 40% of the width
+        canvas.width = window.innerWidth * 0.4;
+        canvas.height = window.innerHeight;
+        
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth * 0.4;
+            canvas.height = window.innerHeight;
+            // Re-draw immediately to avoid visual glitches
+            draw();
+        });
+        
+        const keys = {};
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
+        
+        document.getElementById('restart').addEventListener('click', () => {
+            // Only allow restart from game over state for consistency
+            if (gameState === 'gameOver') {
+                resetGame();
+            } else if (gameState === 'playing' || gameState === 'paused') {
+                // Confirm if player wants to restart mid-game
+                if (confirm("Are you sure you want to restart? Your progress will be lost.")) {
+                    resetGame();
+                }
+            }
+        });
+        
+        // --- Audio Setup ---
+        let audioContext;
+        let bgMusic;
+        let isMuted = false;
+        
+        // Function to create a simple oscillator sound effect
+        function createOscillatorSound(frequency, duration, type = 'sine', startTime = 0) {
+            if (isMuted) return; // Don't play if muted
+            if (gameState === 'paused' || gameState === 'transitioning' || gameState === 'start' || gameState === 'gameOver') return; // Don't play if game isn't active
+            
+            if (!audioContext) {
+                // Lazily create AudioContext on first user interaction
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            // Use current time from audioContext for precise timing
+            const actualStartTime = startTime === 0 ? audioContext.currentTime : audioContext.currentTime + startTime;
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, actualStartTime);
+            
+            gainNode.gain.setValueAtTime(0.5, actualStartTime); // Max volume
+            gainNode.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration); // Fade out
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start(actualStartTime);
+            oscillator.stop(actualStartTime + duration);
+        }
+
+        // Specific sound effects functions
+        function playJumpSound() {
+            createOscillatorSound(600, 0.1, 'triangle');
+        }
+        
+        function playLandSound() {
+            createOscillatorSound(200, 0.08, 'square');
+        }
+
+        function playStarSound() {
+            createOscillatorSound(800, 0.05, 'sine');
+            createOscillatorSound(1000, 0.05, 'sine', 0.05); // Play second tone slightly after first
+        }
+
+        function playEnemyHitSound() {
+            createOscillatorSound(80, 0.2, 'sawtooth');
+            createOscillatorSound(40, 0.2, 'triangle'); // Deeper sound for impact
+        }
+
+        function playLifeLostSound() {
+            createOscillatorSound(150, 0.3, 'sawtooth');
+            createOscillatorSound(75, 0.3, 'triangle', 0.05); // Falling sound
+        }
+
+        function playLevelCompleteSound() {
+            createOscillatorSound(600, 0.1, 'triangle');
+            createOscillatorSound(800, 0.1, 'triangle', 0.1);
+            createOscillatorSound(1000, 0.1, 'triangle', 0.2);
+        }
+
+        function playGameOverSound() {
+            createOscillatorSound(200, 0.4, 'sine');
+            createOscillatorSound(100, 0.5, 'sine', 0.2);
+        }
+        
+        // Background Music Controls
+        const muteButton = document.getElementById('mute-button');
+        muteButton.addEventListener('click', toggleMute);
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            if (bgMusic) {
+                bgMusic.muted = isMuted;
+            }
+            muteButton.textContent = isMuted ? 'Unmute Music' : 'Mute Music';
+            // If unmuting, try to play music if it was paused
+            if (!isMuted && bgMusic && bgMusic.paused && gameState === 'playing') { // Only play if game is 'playing'
+                bgMusic.play().catch(e => console.error("Music autoplay failed after unmuting:", e));
+            } else if (isMuted && bgMusic && !bgMusic.paused) {
+                bgMusic.pause(); // Pause music if muted
+            }
+        }
+        
+        // Function to start/resume music (called after first user interaction or when game state allows)
+        function startMusic() {
+            if (!bgMusic) {
+                bgMusic = new Audio('https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Cycling%20Platforms.mp3');
+                bgMusic.loop = true;
+                bgMusic.volume = 0.3; // Adjust volume as needed
+            }
+            bgMusic.muted = isMuted; // Ensure initial mute state is applied
+            if (!isMuted && bgMusic.paused) {
+                bgMusic.play().catch(e => console.error("Music autoplay failed:", e));
+            }
+        }
+
+        // Listener for the first user interaction to enable audio
+        document.body.addEventListener('click', () => {
+            if (!audioContext) { // Initialize AudioContext if not already
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            startMusic();
+        }, { once: true }); // Ensure it runs only once
+        
+        // --- Game State Variables ---
+        let player = {
+            x: 50,
+            y: 50,
+            radius: 15,
+            vx: 0,
+            vy: 0,
+            onGround: false,
+            lives: 3,
+            scale: 1,
+            canTakeDamage: true, // Cooldown flag for damage
+            damageCooldownTimeout: null // To store the timeout ID
+        };
+        
+        let platforms = [];
+        let enemies = [];
+        let stars = [];
+        let exitPlatform = null;
+        let score = 0;
+        let level = 1;
+        let gameState = 'start'; // Initial game state
+        let platformBaseSpeed = 0.7; 
+        let backgroundColors = [];
+        let highScore = parseInt(localStorage.getItem('platformGameHighScore') || '0', 10);
+        let gameOverFinalScore = 0;
+
+        // Transition variables
+        let transitionAlpha = 0;
+        let transitionSpeed = 0.03; // Speed of the fade
+        let transitionCallback = null; // Function to call when fade-out is complete
+        let playerCanMove = false; // Player cannot move until game starts/unpauses
+        
+        function generateBackgroundColors() {
+            backgroundColors = [];
+            switch (level % 5) {
+                case 1: // Night dawn
+                    backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c'];
+                    break;
+                case 2: // Morning
+                    backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];
+                    break;
+                case 3: // Afternoon
+                    backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6'];
+                    break;
+                case 4: // Evening
+                    backgroundColors = ['#ff9966', '#ff5e62', '#c84e89'];
+                    break;
+                case 0: // Night
+                    backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
+                    break;
+            }
+        }
+        
+        function drawCircleWithGradient(x, y, radius, color1, color2, scale = 1) {
+            ctx.beginPath();
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * scale);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.arc(x, y, radius * scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function drawRectWithGradient(x, y, width, height, color1, color2) {
+            const centerX = x + width / 2;
+            const centerY = y + height / 2;
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, width / 2);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, y, width, height);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, width, height);
+        }
+        
+        function drawTriangleWithGradient(x, y, size, color1, color2) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - size);
+            ctx.lineTo(x - size, y + size);
+            ctx.lineTo(x + size, y + size);
+            ctx.closePath();
+            
+            const centerX = x;
+            const centerY = y;
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function drawStarWithGradient(x, y, radius, spikes, color1, color2, scale = 1) {
+            let rot = Math.PI / 2 * 3;
+            let cx = x;
+            let cy = y;
+            let step = Math.PI / spikes;
+            
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(rot) * radius * scale, cy + Math.sin(rot) * radius * scale);
+            
+            for (let i = 0; i < spikes; i++) {
+                rot += step;
+                let x = cx + Math.cos(rot) * radius * scale * 0.4;
+                let y = cy + Math.sin(rot) * radius * scale * 0.4;
+                ctx.lineTo(x, y);
+                rot += step;
+                x = cx + Math.cos(rot) * radius * scale;
+                y = cy + Math.sin(rot) * radius * scale;
+                ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            
+            const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * scale);
+            gradient.addColorStop(0, color1);
+            gradient.addColorStop(1, color2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function initLevel() {
+            platforms = [];
+            enemies = [];
+            stars = [];
+            exitPlatform = null;
+            generateBackgroundColors();
+            
+            // Starting platform
+            platforms.push({
+                x: 20,
+                y: canvas.height * 0.1, // Start platform near top, adjusted for full height
+                width: 100,
+                height: 20,
+                color1: '#006400',
+                color2: '#004d00',
+                static: true
+            });
+            
+            // Moving platforms
+            const numPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5); // More platforms on higher levels
+            const maxY = canvas.height * 0.9;
+            const minY = canvas.height * 0.15; // Adjusted start Y for platforms
+            const stepY = (maxY - minY) / numPlatforms;
+            
+            for (let i = 0; i < numPlatforms; i++) {
+                const width = 70 + Math.random() * 150;
+                const x = Math.random() * (canvas.width - width);
+                const y = minY + i * stepY;
+                const direction = Math.random() > 0.5 ? 1 : -1;
+                
+                platforms.push({
+                    x,
+                    y,
+                    width,
+                    height: 15,
+                    color1: '#00008B',
+                    color2: '#000066',
+                    static: false,
+                    direction,
+                    speed: platformBaseSpeed * (1.0 + Math.random() * 0.5) // Platforms move faster, individual speeds
+                });
+                
+                // Add enemy to some platforms
+                if (Math.random() < 0.3 + (level * 0.05)) { // Increased chance for enemies on higher levels
+                    enemies.push({
+                        x: x + platforms[platforms.length - 1].width / 2, // Start at center of platform
+                        y: y - 15,
+                        size: 12,
+                        platformIndex: platforms.length - 1,
+                        direction: Math.random() > 0.5 ? 1 : -1, // Enemy's own direction
+                        speed: platformBaseSpeed * (0.5 + Math.random() * 0.5) * 0.5 // Slower than platforms
+                    });
+                }
+            }
+            
+            // Red gutter platform at the very bottom
+            platforms.push({
+                x: 0,
+                y: canvas.height - 20,
+                width: canvas.width,
+                height: 20,
+                color1: '#8B0000',
+                color2: '#660000',
+                static: true,
+                deadly: true
+            });
+            
+            // Add stars
+            const numStars = 5 + level;
+            const maxStarY = canvas.height * 2/3;
+            
+            for (let i = 0; i < numStars; i++) {
+                let valid = false;
+                let starX, starY;
+                
+                while (!valid) {
+                    starX = 20 + Math.random() * (canvas.width - 40);
+                    starY = 20 + Math.random() * (maxStarY - 40);
+                    valid = true;
+                    
+                    // Check if star is not on top of an enemy
+                    for (const enemy of enemies) {
+                        const dx = starX - enemy.x;
+                        const dy = starY - enemy.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < 30) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                     // Check if star is not on top of a platform
+                    if (valid) { // Only check platforms if not already invalid by enemy
+                        for (const platform of platforms) {
+                            if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
+                                starY + 10 > platform.y && starY - 10 < platform.y + platform.height) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                stars.push({
+                    x: starX,
+                    y: starY,
+                    radius: 15,
+                    scale: 1,
+                    collected: false
+                });
+            }
+            
+            // Reset player position
+            player.x = 50;
+            player.y = platforms[0].y - player.radius - 5; // Position player on the starting platform
+            player.vx = 0;
+            player.vy = 0;
+            player.scale = 1;
+            player.onGround = false;
+            player.canTakeDamage = true; // Reset damage cooldown
+            clearTimeout(player.damageCooldownTimeout); // Clear any pending timeout
+        }
+        
+        function update() {
+            switch (gameState) {
+                case 'start':
+                    if (keys[' ']) {
+                        playerCanMove = true;
+                        gameState = 'playing';
+                        keys[' '] = false; // Consume key press
+                        startMusic(); // Start music on game start
+                    }
+                    break;
+                case 'playing':
+                    if (keys['p'] || keys['Escape']) { // Pause game
+                        gameState = 'paused';
+                        keys['p'] = false; keys['Escape'] = false; // Consume key press
+                        if (bgMusic) bgMusic.pause();
+                        playerCanMove = false;
+                    }
+                    updatePlayer();
+                    updatePlatforms();
+                    updateEnemies();
+                    updateStars();
+                    checkExitPlatform();
+                    break;
+                case 'paused':
+                    if (keys['p'] || keys['Escape']) { // Unpause game
+                        gameState = 'playing';
+                        keys['p'] = false; keys['Escape'] = false; // Consume key press
+                        if (bgMusic) startMusic(); // Resume music
+                        playerCanMove = true;
+                    }
+                    break;
+                case 'levelComplete':
+                    // Handled by transition system now
+                    break;
+                case 'gameOver':
+                    if (keys[' ']) {
+                        resetGame();
+                        keys[' '] = false; // Consume key press
+                    }
+                    break;
+                case 'transitioning':
+                    transitionAlpha += transitionSpeed;
+                    if (transitionAlpha >= 1) {
+                        transitionAlpha = 1;
+                        if (transitionCallback) transitionCallback(); // Perform state change or level init
+                        transitionSpeed *= -1; // Start fading in
+                    } else if (transitionAlpha <= 0) {
+                        transitionAlpha = 0;
+                        transitionSpeed = Math.abs(transitionSpeed); // Reset speed for next fade out
+                        gameState = 'playing'; // Or whichever state is next
+                        playerCanMove = true;
+                    }
+                    break;
+            }
+        }
+        
+        function updatePlayer() {
+            if (!playerCanMove) {
+                player.vx = 0; // Stop horizontal movement if not allowed to move
+                return;
+            }
+
+            // Horizontal movement
+            if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.2, -4); 
+            else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.2, 4); 
+            else player.vx *= 0.9;
+            
+            player.x += player.vx;
+            
+            // Jumping
+            if (keys[' '] && player.onGround) {
+                player.vy = -9; // Jumps are slightly higher
+                player.onGround = false;
+                playJumpSound();
+            }
+            
+            // Gravity
+            player.vy += 0.3;
+            player.y += player.vy;
+            
+            // Boundary check
+            if (player.x < player.radius) {
+                player.x = player.radius;
+                player.vx = 0;
+            }
+            if (player.x > canvas.width - player.radius) {
+                player.x = canvas.width - player.radius;
+                player.vx = 0;
+            }
+            
+            // Platform collision
+            let landedOnPlatformThisFrame = false;
+            for (const platform of platforms) {
+                // Check if player is falling and will land on platform
+                if (player.vy > 0 && 
+                    player.y + player.radius > platform.y && 
+                    player.y - player.radius < platform.y + platform.height && // check Y overlap
+                    player.x + player.radius > platform.x && 
+                    player.x - player.radius < platform.x + platform.width) {
+                    
+                    // If player's bottom edge was above platform's top edge in previous frame
+                    // and player is now colliding, it means landing.
+                    if (player.y - player.vy + player.radius <= platform.y) { 
+                        player.y = platform.y - player.radius; // Snap to top of platform
+                        
+                        if (!player.onGround) { // Only apply bounce and play sound if just landed
+                             player.vy = -player.vy * 0.2; // Small bounce
+                             playLandSound();
+                        } else {
+                            player.vy = 0; // Prevent multiple bounces if already on ground
+                        }
+                        player.onGround = true;
+                        landedOnPlatformThisFrame = true;
+                        
+                        // Squeeze animation
+                        if (player.scale === 1) { // Only animate if not already squished
+                            player.scale = 0.9;
+                            setTimeout(() => player.scale = 1, 100);
+                        }
+                        
+                        // Move with platform
+                        if (!platform.static) {
+                            player.x += platform.direction * platform.speed;
+                        }
+                        
+                        // Check if deadly platform
+                        if (platform.deadly && player.canTakeDamage) {
+                            playerDie(true); // Indicate death by deadly platform
+                        }
+                    }
+                }
+            }
+            // If player didn't land on any platform this frame, they are in the air
+            if (!landedOnPlatformThisFrame && player.onGround && player.vy > 0) {
+                 player.onGround = false;
+            }
+
+
+            // Enemy collision
+            for (const enemy of enemies) {
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < player.radius + enemy.size * 0.7 && player.canTakeDamage) { // Reduced enemy hit radius
+                    playerDie(false); // Indicate death by enemy
+                    playEnemyHitSound();
+                }
+            }
+            
+            // Fall off screen (below the red gutter platform)
+            if (player.y > canvas.height + 50) { // Give a little buffer
+                if (player.canTakeDamage) { // Prevent multiple life losses if already falling
+                    playerDie(true); // Indicate death by fall
+                }
+            }
+        }
+        
+        function updatePlatforms() {
+            for (let i = 0; i < platforms.length; i++) {
+                const platform = platforms[i];
+                if (!platform.static) {
+                    platform.x += platform.direction * platform.speed;
+                    
+                    // Reverse direction at edges
+                    if (platform.x <= 0 || platform.x + platform.width >= canvas.width) {
+                        platform.direction *= -1;
+                        // Nudge back into bounds if it overshot
+                        if (platform.x < 0) platform.x = 0;
+                        if (platform.x + platform.width > canvas.width) platform.x = canvas.width - platform.width;
+                    }
+                }
+            }
+        }
+        
+        function updateEnemies() {
+            for (const enemy of enemies) {
+                const platform = platforms[enemy.platformIndex];
+                
+                // Enemy movement
+                enemy.x += enemy.direction * enemy.speed;
+
+                // Reverse enemy direction if it hits platform edges
+                if (enemy.x - enemy.size < platform.x || enemy.x + enemy.size > platform.x + platform.width) {
+                    enemy.direction *= -1;
+                    // Nudge back into bounds if it overshot
+                    if (enemy.x - enemy.size < platform.x) enemy.x = platform.x + enemy.size;
+                    if (enemy.x + enemy.size > platform.x + platform.width) enemy.x = platform.x + platform.width - enemy.size;
+                }
+                
+                enemy.y = platform.y - enemy.size - 2; // Position slightly above platform
+            }
+        }
+        
+        function updateStars() {
+            let allCollected = true;
+            
+            for (let i = 0; i < stars.length; i++) {
+                const star = stars[i];
+                
+                if (!star.collected) {
+                    allCollected = false;
+                    
+                    const dx = player.x - star.x;
+                    const dy = player.y - star.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < player.radius + star.radius * star.scale * 0.7) {
+                        star.collected = true;
+                        score += 1;
+                        playStarSound();
+                        
+                        // Animate star collection
+                        (function animateStar(starIndex, scaleValue) {
+                            if (!stars[starIndex] || stars[starIndex].collected !== true) return; // Stop if star is somehow invalidated
+                            stars[starIndex].scale = scaleValue;
+                            if (scaleValue > 0.1) {
+                                requestAnimationFrame(() => animateStar(starIndex, scaleValue - 0.1));
+                            }
+                        })(i, 1);
+                    }
+                }
+            }
+            
+            // Only create exit platform if all stars are collected AND there isn't one already
+            if (allCollected && !exitPlatform) {
+                exitPlatform = {
+                    x: canvas.width - 120,
+                    y: canvas.height * 0.1, // Exit platform near top, adjusted for full height
+                    width: 100,
+                    height: 20,
+                    color1: '#006400',
+                    color2: '#004d00',
+                    static: true
+                };
+            }
+        }
+        
+        // isFallOrDeadlyPlatform: true if died from fall/deadly platform, false if by enemy
+        function playerDie(isFallOrDeadlyPlatform) {
+            if (!player.canTakeDamage) return; // Prevent multiple deaths from one hit/fall
+            
+            player.lives--;
+            player.canTakeDamage = false; // Disable damage for a duration
+            clearTimeout(player.damageCooldownTimeout); // Clear previous timeout if any
+            player.damageCooldownTimeout = setTimeout(() => {
+                player.canTakeDamage = true;
+            }, 1000); // 1-second invulnerability
+            
+            if (player.lives <= 0) {
+                gameOverFinalScore = score; // Store score for game over screen
+                if (gameOverFinalScore > highScore) {
+                    highScore = gameOverFinalScore;
+                    localStorage.setItem('platformGameHighScore', highScore);
+                }
+                
+                // Start fade out, then transition to game over
+                playerCanMove = false; // Disable player movement
+                gameState = 'transitioning';
+                transitionCallback = () => {
+                    gameState = 'gameOver';
+                    playGameOverSound();
+                };
+
+            } else {
+                if (isFallOrDeadlyPlatform) {
+                    playLifeLostSound(); // Specific sound for falling/deadly platform
+                } 
+                // Enemy hit sound is played in updatePlayer directly when collision occurs
+                
+                // Animate player shrinking then respawn via transition
+                playerCanMove = false; // Disable player movement
+                gameState = 'transitioning';
+                transitionCallback = () => {
+                    // Reset player after animation completes
+                    player.x = 50;
+                    player.y = platforms[0].y - player.radius - 5; // Reset to starting platform
+                    player.vx = 0;
+                    player.vy = 0;
+                    player.scale = 1;
+                    player.onGround = false;
+                };
+            }
+        }
+        
+        function checkExitPlatform() {
+            if (exitPlatform) {
+                if (player.y + player.radius > exitPlatform.y && 
+                    player.y - player.radius < exitPlatform.y + exitPlatform.height &&
+                    player.x + player.radius > exitPlatform.x && 
+                    player.x - player.radius < exitPlatform.x + exitPlatform.width) {
+                    
+                    if (gameState === 'playing') { // Prevent re-triggering sound/score if already complete
+                        score += 5; // 5 points for completing level
+                        playLevelCompleteSound();
+                        
+                        // Start fade out, then transition to next level
+                        playerCanMove = false; // Disable player movement
+                        gameState = 'transitioning';
+                        transitionCallback = () => {
+                            level++;
+                            platformBaseSpeed += 0.05; // Slightly increase base speed for next level
+                            initLevel();
+                        };
+                    }
+                }
+            }
+        }
+        
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            backgroundColors.forEach((color, index) => {
+                gradient.addColorStop(index / (backgroundColors.length - 1), color);
+            });
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 0, canvas.height); // Fill background
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawGameElements() {
+            drawBackground();
+            
+            // Draw platforms
+            for (const platform of platforms) {
+                drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
+            }
+            
+            // Draw exit platform
+            if (exitPlatform) {
+                drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
+                
+                // Text for exit platform with outline
+                ctx.fillStyle = 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.strokeText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
+                ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
+            }
+            
+            // Draw stars
+            for (const star of stars) {
+                if (!star.collected) {
+                    drawStarWithGradient(star.x, star.y, star.radius, 5, '#FFFF00', '#FFD700', star.scale);
+                }
+            }
+            
+            // Draw enemies
+            for (const enemy of enemies) {
+                drawTriangleWithGradient(enemy.x, enemy.y, enemy.size, '#FF0000', '#8B0000');
+            }
+            
+            // Draw player
+            drawCircleWithGradient(player.x, player.y, player.radius, '#FFFFFF', '#87CEEB', player.scale);
+            
+            // Draw UI (Score, Level, Lives) with outline
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 20px Arial'; 
+            ctx.textAlign = 'left';
+
+            ctx.strokeText(`Score: ${score}`, 10, 30);
+            ctx.fillText(`Score: ${score}`, 10, 30);
+
+            ctx.strokeText(`Level: ${level}`, 10, 60);
+            ctx.fillText(`Level: ${level}`, 10, 60);
+
+            ctx.strokeText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 90);
+            ctx.fillText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 90);
+        }
+
+        function drawScreenMessage(title, message, titleColor, messageColor, titleSize, messageSize) {
+            ctx.fillStyle = titleColor;
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 4;
+            ctx.font = `bold ${titleSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.strokeText(title, canvas.width / 2, canvas.height / 2 - 20);
+            ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 20);
+
+            if (message) {
+                ctx.fillStyle = messageColor;
+                ctx.font = `bold ${messageSize}px Arial`;
+                ctx.lineWidth = 3;
+                ctx.strokeText(message, canvas.width / 2, canvas.height / 2 + 20);
+                ctx.fillText(message, canvas.width / 2, canvas.height / 2 + 20);
+            }
+        }
+
+        function drawStartScreen() {
+            drawBackground();
+            drawScreenMessage("REACH FOR THE STARS", "Press SPACE to Start", 'cyan', 'white', 40, 25);
+            ctx.font = 'bold 18px Arial';
+            ctx.lineWidth = 2;
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.strokeText("Controls: Arrow Keys to Move, SPACE to Jump", canvas.width / 2, canvas.height / 2 + 70);
+            ctx.fillText("Controls: Arrow Keys to Move, SPACE to Jump", canvas.width / 2, canvas.height / 2 + 70);
+            ctx.strokeText("Collect all stars to find the EXIT!", canvas.width / 2, canvas.height / 2 + 100);
+            ctx.fillText("Collect all stars to find the EXIT!", canvas.width / 2, canvas.height / 2 + 100);
+        }
+
+        function drawPausedScreen() {
+            drawGameElements(); // Draw game underneath
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark overlay
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawScreenMessage("PAUSED", "Press P or ESC to Resume", 'yellow', 'white', 40, 25);
+        }
+
+        function drawGameOverScreen() {
+            drawBackground(); // Just background for game over
+            drawScreenMessage("GAME OVER", `Final Score: ${gameOverFinalScore}`, 'red', 'white', 40, 25);
+            
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 25px Arial';
+            ctx.textAlign = 'center';
+            ctx.strokeText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + 60);
+            ctx.fillText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + 60);
+
+            ctx.font = 'bold 20px Arial';
+            ctx.strokeText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2 + 100);
+            ctx.fillText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2 + 100);
+        }
+
+        function drawTransitionOverlay() {
+            ctx.fillStyle = `rgba(0, 0, 0, ${transitionAlpha})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function draw() {
+            // Clear canvas for each frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw based on game state
+            if (gameState === 'start') {
+                drawStartScreen();
+            } else if (gameState === 'playing' || gameState === 'paused' || gameState === 'levelComplete' || gameState === 'transitioning') {
+                drawGameElements(); // Always draw game elements if not in start or game over
+                if (gameState === 'paused') {
+                    drawPausedScreen();
+                }
+            } else if (gameState === 'gameOver') {
+                drawGameOverScreen();
+            }
+            
+            // Draw transition overlay last
+            if (gameState === 'transitioning') {
+                drawTransitionOverlay();
+            }
+        }
+        
+        function resetGame() {
+            player.lives = 3;
+            score = 0;
+            level = 1;
+            platformBaseSpeed = 0.7; // Reset base speed
+            
+            // Reset player and level
+            initLevel(); 
+            
+            // Reset state
+            gameState = 'playing';
+            player.canTakeDamage = true;
+            clearTimeout(player.damageCooldownTimeout); 
+            
+            // Reset transition
+            transitionAlpha = 0;
+            transitionSpeed = Math.abs(transitionSpeed);
+            transitionCallback = null;
+            playerCanMove = true;
+
+            // Ensure music is playing if not muted
+            startMusic(); 
+        }
+        
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Initial setup
+        initLevel(); // Setup the first level elements
+        gameLoop();
+    </script>
+</body>
+</html>

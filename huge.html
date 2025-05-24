@@ -88,17 +88,18 @@
             #mobile-controls {
                 display: flex;
             }
+            /* Adjust canvas size for mobile if necessary to prevent clipping, or ensure it fits */
             body {
-                 flex-direction: column; 
-                 justify-content: flex-start; 
+                 flex-direction: column; /* Ensure vertical layout */
+                 justify-content: flex-start; /* Align canvas to top */
             }
             canvas {
-                max-width: 100%; 
-                max-height: calc(100vh - 120px); 
-                margin-top: 10px; 
+                max-width: 100%; /* Ensure canvas doesn't overflow */
+                max-height: calc(100vh - 120px); /* Leave space for controls/buttons */
+                margin-top: 10px; /* Small margin from top */
             }
             #controls {
-                top: 5px; 
+                top: 5px; /* Adjust top controls to be less intrusive */
                 right: 5px;
             }
         }
@@ -136,6 +137,7 @@
         const keys = {};
         window.addEventListener('keydown', e => {
             keys[e.key] = true;
+            // Prevent default behavior for spacebar to avoid page scrolling
             if (e.key === ' ') e.preventDefault(); 
         });
         window.addEventListener('keyup', e => keys[e.key] = false);
@@ -153,7 +155,7 @@
         
         function createOscillatorSound(frequency, duration, type = 'sine', startTime = 0) {
             if (isMuted) return;
-            if (gameState !== 'playing' && gameState !== 'levelComplete') return; 
+            if (gameState !== 'playing' && gameState !== 'levelComplete') return; // Only play sounds during active gameplay
             
             if (!audioContext) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -228,21 +230,22 @@
 
         function setupTouchControl(btn, key) {
             btn.addEventListener('touchstart', (e) => {
-                e.preventDefault(); 
+                e.preventDefault(); // Prevent scrolling/zooming
                 keys[key] = true;
             });
             btn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 keys[key] = false;
             });
+            // Also listen for mouse events on buttons for dev/testing on desktop
             btn.addEventListener('mousedown', () => keys[key] = true);
             btn.addEventListener('mouseup', () => keys[key] = false);
-            btn.addEventListener('mouseleave', () => keys[key] = false); 
+            btn.addEventListener('mouseleave', () => keys[key] = false); // Important for mouse events
         }
 
         setupTouchControl(leftBtn, 'ArrowLeft');
         setupTouchControl(rightBtn, 'ArrowRight');
-        setupTouchControl(jumpBtn, ' '); 
+        setupTouchControl(jumpBtn, ' '); // Spacebar key
         
         // --- Game State Variables ---
         let player = {
@@ -256,19 +259,19 @@
             scale: 1,
             canTakeDamage: true,
             damageCooldownTimeout: null,
-            invincible: false,
+            invincible: false, // New: for power-up
             invincibleTimer: 0,
-            speedBoost: false,
+            speedBoost: false, // New: for power-up
             speedBoostTimer: 0,
-            baseSpeed: 4,
-            baseJump: -9
+            baseSpeed: 4, // Player's base horizontal speed
+            baseJump: -9 // Player's base jump velocity
         };
         
         let platforms = [];
         let enemies = [];
         let stars = [];
-        let powerUps = [];
-        let particles = [];
+        let powerUps = []; // New: Power-up array
+        let particles = []; // New: Particle array
         let exitPlatform = null;
         let score = 0;
         let level = 1;
@@ -305,13 +308,13 @@
             update() {
                 this.x += this.vx;
                 this.y += this.vy;
-                this.vy += 0.1; 
+                this.vy += 0.1; // Apply some gravity for dust/splatter
                 this.lifetime--;
                 this.alpha = this.lifetime / this.originalLifetime;
                 if (this.type === 'sparkle') {
-                    this.size *= 0.98; 
+                    this.size *= 0.98; // Shrink sparkles
                 } else {
-                    this.size *= 0.95; 
+                    this.size *= 0.95; // Shrink other particles
                 }
             }
 
@@ -351,7 +354,7 @@
                     color = 'yellow';
                     minSize = 3; maxSize = 6;
                     minVx = -2; maxVx = 2;
-                    minVy = -2; maxVy = 2; 
+                    minVy = -2; maxVy = 2; // Sparkles don't have gravity
                     lifetime = 40;
                     break;
                 case 'dust':
@@ -367,7 +370,7 @@
                     color = 'lightblue';
                     minSize = 5; maxSize = 10;
                     minVx = -1; maxVx = 1;
-                    minVy = 1; maxVy = 3; 
+                    minVy = 1; maxVy = 3; // Puffs move downwards
                     lifetime = 25;
                     break;
                 case 'hit_splatter':
@@ -399,25 +402,25 @@
             constructor(x, y, type) {
                 this.x = x;
                 this.y = y;
-                this.type = type; 
+                this.type = type; // 'invincible', 'speed'
                 this.radius = 12;
                 this.collected = false;
                 this.scale = 1;
                 this.color1 = '';
                 this.color2 = '';
-                this.symbol = ''; 
-                this.animationTimer = 0; 
+                this.symbol = ''; // Text symbol for the power-up
+                this.animationTimer = 0; // For floating animation
                 this.animationSpeed = 0.05;
 
                 switch (this.type) {
                     case 'invincible':
-                        this.color1 = '#FFD700'; 
-                        this.color2 = '#FFA500'; 
+                        this.color1 = '#FFD700'; // Gold
+                        this.color2 = '#FFA500'; // Orange-gold
                         this.symbol = '✨';
                         break;
                     case 'speed':
-                        this.color1 = '#00FF00'; 
-                        this.color2 = '#008000'; 
+                        this.color1 = '#00FF00'; // Green
+                        this.color2 = '#008000'; // Dark green
                         this.symbol = '⚡';
                         break;
                 }
@@ -426,7 +429,7 @@
             draw(ctx) {
                 if (this.collected) return;
 
-                const offsetY = Math.sin(this.animationTimer) * 5; 
+                const offsetY = Math.sin(this.animationTimer) * 5; // Float up and down
                 drawCircleWithGradient(this.x, this.y + offsetY, this.radius, this.color1, this.color2, this.scale);
 
                 ctx.fillStyle = 'white';
@@ -523,11 +526,21 @@
         function generateBackgroundColors() {
             backgroundColors = [];
             switch (level % 5) {
-                case 1: backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c']; break;
-                case 2: backgroundColors = ['#f9d423', '#ff4e50', '#fc913a']; break;
-                case 3: backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6']; break;
-                case 4: backgroundColors = ['#ff9966', '#ff5e62', '#c84e89']; break;
-                case 0: backgroundColors = ['#141e30', '#243b55', '#1a2a3a']; break;
+                case 1: // Night dawn
+                    backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c'];
+                    break;
+                case 2: // Morning
+                    backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];
+                    break;
+                case 3: // Afternoon
+                    backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6'];
+                    break;
+                case 4: // Evening
+                    backgroundColors = ['#ff9966', '#ff5e62', '#c84e89'];
+                    break;
+                case 0: // Night
+                    backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
+                    break;
             }
         }
         
@@ -536,14 +549,15 @@
             enemies = [];
             stars = [];
             powerUps = [];
-            particles = [];
+            particles = []; // Clear particles on level init
             exitPlatform = null;
             generateBackgroundColors();
             
-            // Green starting platform
+            // Green starting platform - Fixed Y to be clearly visible in the top-left corner
+            const START_PLATFORM_Y = 30; // Fixed pixels from top
             platforms.push({
                 x: 20,
-                y: canvas.height * 0.05, // Adjusted for better visibility at top
+                y: START_PLATFORM_Y, 
                 width: 100,
                 height: 20,
                 color1: '#006400', 
@@ -553,52 +567,94 @@
             });
             
             const numDynamicPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
-            const maxY = canvas.height * 0.9;
-            const minY = canvas.height * 0.15;
-            const verticalGap = (maxY - minY) / (numDynamicPlatforms + 1);
+            
+            // Adjusted minY and maxY for dynamic platforms
+            const dynamicPlatformMinY = START_PLATFORM_Y + platforms[0].height + 30; // Below start platform
+            const dynamicPlatformMaxY = canvas.height - 110; // Above gutter and exit platform
+            const verticalRange = dynamicPlatformMaxY - dynamicPlatformMinY;
+            const verticalGap = verticalRange / (numDynamicPlatforms + 1);
+
 
             let dynamicPlatformConfigs = [];
+
+            // --- Special Platform Logic ---
             let specialPlatformsToGenerate = [];
 
             if (level === 1) {
-                // No special platforms
+                // Only standard moving platforms in Level 1
+                // specialPlatformsToGenerate remains empty
             } else if (level >= 2 && level <= 4) {
+                // Introduce one new type sequentially for levels 2, 3, 4
+                // Level 2: disappearing, Level 3: bouncy, Level 4: conveyor
                 const typeToIntroduce = SPECIAL_PLATFORM_TYPES[level - 2];
                 specialPlatformsToGenerate.push(typeToIntroduce);
             } else if (level >= 5) {
+                // Level 5 onwards: Add two random special platforms
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
             }
 
+            // Generate dynamic platform configurations
             for (let i = 0; i < numDynamicPlatforms; i++) {
-                let currentType = 'normal'; 
-                let pColor1 = '#00008B'; 
+                let currentType = 'normal'; // Default to normal moving platform
+                let pColor1 = '#00008B'; // Dark Blue
                 let pColor2 = '#000066';
                 let platformSpeedFactor = (1.0 + Math.random() * 0.5);
                 let isStatic = false;
                 let direction = Math.random() > 0.5 ? 1 : -1;
 
+                // If there are special platforms to add AND we haven't added all of them yet for this level
+                // This logic ensures that if `specialPlatformsToGenerate` is not empty, we prioritize placing those.
+                // We also add a random chance so it's not always the very first platforms.
                 if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3) { 
-                    currentType = specialPlatformsToGenerate.shift(); 
+                    currentType = specialPlatformsToGenerator.shift(); // Takes the first element
                     switch (currentType) {
-                        case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
-                        case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
-                        case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; break;
+                        case 'disappearing':
+                            pColor1 = '#800080'; // Purple
+                            pColor2 = '#4B0082';
+                            isStatic = false; 
+                            break;
+                        case 'bouncy':
+                            pColor1 = '#32CD32'; // LimeGreen
+                            pColor2 = '#228B22';
+                            isStatic = true; // Bouncy platforms are typically static
+                            platformSpeedFactor = 0; 
+                            break;
+                        case 'conveyor':
+                            pColor1 = '#A9A9A9'; // DarkGrey
+                            pColor2 = '#696969';
+                            isStatic = false;
+                            platformSpeedFactor = (1.0 + Math.random() * 0.5); 
+                            break;
                     }
                 }
 
                 const width = 70 + Math.random() * 150;
-                const y = minY + (i + 1) * verticalGap; 
+                const y = dynamicPlatformMinY + (i + 1) * verticalGap; // Spread platforms evenly vertically
                 const x = Math.random() * (canvas.width - width);
 
                 dynamicPlatformConfigs.push({
-                    x, y, width, height: 15, color1: pColor1, color2: pColor2,
-                    static: isStatic, direction, speed: platformBaseSpeed * platformSpeedFactor,
-                    type: currentType, originalColor1: pColor1, originalColor2: pColor2,
-                    active: true, timer: 0, reappearTime: 120 
+                    x,
+                    y,
+                    width,
+                    height: 15,
+                    color1: pColor1,
+                    color2: pColor2,
+                    static: isStatic,
+                    direction,
+                    speed: platformBaseSpeed * platformSpeedFactor,
+                    type: currentType,
+                    originalColor1: pColor1, 
+                    originalColor2: pColor2,
+                    active: true, 
+                    timer: 0, 
+                    reappearTime: 120 
                 });
             }
 
+            // Add any remaining special platforms if they haven't been placed (e.g. if random wasn't picked for existing slots)
+            // This loop ensures that if `specialPlatformsToGenerate` still has items after the main loop,
+            // they are definitively added to the platforms list.
             while(specialPlatformsToGenerate.length > 0) {
                 const currentType = specialPlatformsToGenerate.shift();
                 let pColor1 = '#00008B'; let pColor2 = '#000066';
@@ -611,7 +667,7 @@
                 }
 
                 const width = 70 + Math.random() * 150;
-                const y = minY + Math.random() * (maxY - minY); 
+                const y = dynamicPlatformMinY + Math.random() * verticalRange; // Place it randomly within the range if not assigned to an existing slot
                 const x = Math.random() * (canvas.width - width);
 
                 dynamicPlatformConfigs.push({
@@ -622,58 +678,92 @@
                 });
             }
 
+            // Sort by Y to ensure vertical distribution, then add to main array
             dynamicPlatformConfigs.sort((a, b) => a.y - b.y);
             dynamicPlatformConfigs.forEach(config => platforms.push(config));
 
             // Red gutter platform
             platforms.push({
-                x: 0, y: canvas.height - 20, width: canvas.width, height: 20,
-                color1: '#8B0000', color2: '#660000', static: true, deadly: true, type: 'normal'
+                x: 0,
+                y: canvas.height - 20,
+                width: canvas.width,
+                height: 20,
+                color1: '#8B0000',
+                color2: '#660000',
+                static: true,
+                deadly: true,
+                type: 'normal'
             });
             
             // --- Enemy and Power-up placement ---
+            // Iterate over dynamic platforms (excluding the initial static platform and the gutter)
             for (let i = 1; i < platforms.length - 1; i++) {
                 const platform = platforms[i];
+
+                // Add enemy to some platforms (less chance on 'bouncy' to avoid frustration)
                 if (Math.random() < (0.3 + (level * 0.05)) && platform.type !== 'bouncy') {
                     enemies.push({
-                        x: platform.x + platform.width / 2, y: platform.y - 15, size: 12,
-                        platformIndex: i, direction: Math.random() > 0.5 ? 1 : -1,
+                        x: platform.x + platform.width / 2,
+                        y: platform.y - 15,
+                        size: 12,
+                        platformIndex: i, // Use the actual index of the platform
+                        direction: Math.random() > 0.5 ? 1 : -1,
                         speed: platformBaseSpeed * (0.5 + Math.random() * 0.5) * 0.5
                     });
                 }
+
+                // Add power-up to some platforms (less frequent than enemies, and not on 'bouncy'/'disappearing')
                 if (Math.random() < 0.08 && platform.type !== 'bouncy' && platform.type !== 'disappearing') {
                     const puType = Math.random() < 0.5 ? 'invincible' : 'speed';
                     powerUps.push(new PowerUp(platform.x + platform.width / 2, platform.y - 20, puType));
                 }
             }
             
-            // Add stars
+            // Add stars (keep existing logic to avoid overlap with enemies/platforms/powerups)
             const numStars = 5 + level;
-            const maxStarY = canvas.height * 2/3;
-            const uiSafeArea = { x: 150, y: 100 }; // Area to avoid for stars
-            const starMinDistance = 40; // Min distance between stars
+            const starMinX = 20;
+            const starMaxX = canvas.width - 40;
+            const starMinY = dynamicPlatformMinY; // Stars start from below the top platform
+            const starMaxY = dynamicPlatformMaxY; // Stars don't go below the lowest dynamic platform
+
+            // Define UI exclusion zone for star placement (top-left)
+            const uiExclusionZone = {
+                x: 0,
+                y: 0,
+                width: 180, // Covers score, level, lives text
+                height: 110 // Covers the vertical extent of text
+            };
+
+            let placedStars = []; // Keep track of stars already placed in this level
 
             for (let i = 0; i < numStars; i++) {
                 let valid = false;
                 let starX, starY;
-                let attempts = 0; // Prevent infinite loop
-                while (!valid && attempts < 100) {
-                    attempts++;
-                    starX = 20 + Math.random() * (canvas.width - 40);
-                    starY = 20 + Math.random() * (maxStarY - 40);
+                let attempts = 0;
+                const maxAttempts = 100; // Prevent infinite loops
+
+                while (!valid && attempts < maxAttempts) {
+                    starX = starMinX + Math.random() * (starMaxX - starMinX);
+                    starY = starMinY + Math.random() * (starMaxY - starMinY);
+                    
                     valid = true;
 
-                    // Check if in UI safe area
-                    if (starX < uiSafeArea.x && starY < uiSafeArea.y) {
+                    // Check against UI exclusion zone
+                    if (starX < uiExclusionZone.x + uiExclusionZone.width &&
+                        starY < uiExclusionZone.y + uiExclusionZone.height &&
+                        starX + 15 > uiExclusionZone.x && starY + 15 > uiExclusionZone.y) {
                         valid = false;
+                        attempts++;
                         continue;
                     }
+
                     // Check against enemies
                     for (const enemy of enemies) {
                         const dx = starX - enemy.x; const dy = starY - enemy.y;
                         if (Math.sqrt(dx * dx + dy * dy) < 30) { valid = false; break; }
                     }
-                    if (!valid) continue;
+                    if (!valid) { attempts++; continue; }
+
                     // Check against platforms
                     for (const platform of platforms) {
                         if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
@@ -682,31 +772,45 @@
                             break;
                         }
                     }
-                    if (!valid) continue;
+                    if (!valid) { attempts++; continue; }
+
                     // Check against power-ups
                     for (const pu of powerUps) {
                         const dx = starX - pu.x; const dy = starY - pu.y;
                         if (Math.sqrt(dx * dx + dy * dy) < 40) { valid = false; break; }
                     }
-                    if (!valid) continue;
-                    // Check against other stars for overlap
-                    for (const existingStar of stars) {
-                        const dx = starX - existingStar.x; const dy = starY - existingStar.y;
-                        if (Math.sqrt(dx * dx + dy * dy) < starMinDistance) { valid = false; break; }
+                    if (!valid) { attempts++; continue; }
+
+                    // Check against other stars already placed
+                    for (const existingStar of placedStars) {
+                        const dx = starX - existingStar.x;
+                        const dy = starY - existingStar.y;
+                        // Assuming star radius is 15, so 30 for clear separation
+                        if (Math.sqrt(dx * dx + dy * dy) < star.radius * 2) { 
+                            valid = false; 
+                            break; 
+                        }
                     }
+                    if (!valid) { attempts++; continue; }
                 }
-                if (valid) { // Only add if a valid position was found
-                   stars.push({ x: starX, y: starY, radius: 15, scale: 1, collected: false });
+
+                if (valid) {
+                    const newStar = { x: starX, y: starY, radius: 15, scale: 1, collected: false };
+                    stars.push(newStar);
+                    placedStars.push(newStar); // Add to temp list for collision checking
+                } else {
+                    console.warn(`Could not place star ${i} after ${maxAttempts} attempts.`);
                 }
             }
             
             // Reset player position
             player.x = 50;
-            player.y = platforms[0].y - player.radius; // Start on the platform
+            // Player starts directly on the first platform
+            player.y = platforms[0].y - player.radius; 
             player.vx = 0;
-            player.vy = 0; // Ensure no initial velocity
+            player.vy = 0;
             player.scale = 1;
-            player.onGround = true; // Start on the ground
+            player.onGround = true; // Player starts on the ground
             player.canTakeDamage = true;
             clearTimeout(player.damageCooldownTimeout);
             player.invincible = false;
@@ -736,8 +840,8 @@
                     updatePlatforms();
                     updateEnemies();
                     updateStars();
-                    updatePowerUps(); 
-                    updateParticles(); 
+                    updatePowerUps(); // New
+                    updateParticles(); // New
                     checkExitPlatform();
                     break;
                 case 'paused':
@@ -778,28 +882,32 @@
 
             let currentSpeed = player.baseSpeed;
             if (player.speedBoost) {
-                currentSpeed *= 1.5; 
+                currentSpeed *= 1.5; // 50% speed boost
                 player.speedBoostTimer--;
                 if (player.speedBoostTimer <= 0) {
                     player.speedBoost = false;
                 }
             }
 
+            // Horizontal movement
             if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.2, -currentSpeed);
             else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.2, currentSpeed);
             else player.vx *= 0.9;
             
             player.x += player.vx;
             
+            // Jumping
             if (keys[' '] && player.onGround) {
                 player.vy = player.baseJump;
                 player.onGround = false;
                 playJumpSound();
             }
             
+            // Gravity
             player.vy += 0.3;
             player.y += player.vy;
             
+            // Boundary check
             if (player.x < player.radius) {
                 player.x = player.radius;
                 player.vx = 0;
@@ -809,9 +917,10 @@
                 player.vx = 0;
             }
             
+            // Platform collision
             let landedOnPlatformThisFrame = false;
             for (const platform of platforms) {
-                if (!platform.active) continue; 
+                if (!platform.active) continue; // Skip inactive disappearing platforms
 
                 if (player.vy > 0 && 
                     player.y + player.radius > platform.y && 
@@ -824,9 +933,9 @@
                         
                         if (!player.onGround) {
                              if (platform.type === 'bouncy') {
-                                player.vy = player.baseJump * 1.8; 
+                                player.vy = player.baseJump * 1.8; // Much higher bounce
                              } else {
-                                player.vy = -player.vy * 0.2; 
+                                player.vy = -player.vy * 0.2; // Small bounce
                              }
                              playLandSound();
                         } else {
@@ -840,19 +949,22 @@
                             setTimeout(() => player.scale = 1, 100);
                         }
                         
+                        // Move with platform or be affected by conveyor
                         if (!platform.static) {
                             player.x += platform.direction * platform.speed;
                         }
                         if (platform.type === 'conveyor') {
-                             player.x += platform.direction * platform.speed * 1.5; 
+                             player.x += platform.direction * platform.speed * 1.5; // Conveyor pushes player
                         }
 
+                        // Disappearing platform logic
                         if (platform.type === 'disappearing') {
-                            platform.timer = 60; 
-                            platform.color1 = 'rgba(128,0,128,0.5)'; 
+                            platform.timer = 60; // Start disappearing timer (e.g., 1 second)
+                            platform.color1 = 'rgba(128,0,128,0.5)'; // Fade out
                             platform.color2 = 'rgba(75,0,130,0.5)';
                         }
                         
+                        // Check if deadly platform
                         if (platform.deadly && !player.invincible && player.canTakeDamage) {
                             playerDie(true);
                         }
@@ -863,6 +975,7 @@
                  player.onGround = false;
             }
 
+            // Enemy collision
             for (const enemy of enemies) {
                 const dx = player.x - enemy.x;
                 const dy = player.y - enemy.y;
@@ -870,23 +983,27 @@
                 
                 if (distance < player.radius + enemy.size * 0.7 && !player.invincible && player.canTakeDamage) {
                     playerDie(false);
+                    // Knockback player away from enemy
                     player.vx = dx > 0 ? 5 : -5;
                     player.vy = -3;
                 }
             }
             
+            // Fall off screen (below the red gutter platform)
             if (player.y > canvas.height + 50) {
                 if (!player.invincible && player.canTakeDamage) {
                     playerDie(true);
                 }
             }
 
+            // Update invincible timer
             if (player.invincibleTimer > 0) {
                 player.invincibleTimer--;
                 if (player.invincibleTimer <= 0) {
                     player.invincible = false;
+                    // Re-enable damage cooldown after invincibility wears off if it was suppressed
                     player.canTakeDamage = true; 
-                    clearTimeout(player.damageCooldownTimeout); 
+                    clearTimeout(player.damageCooldownTimeout); // Clear previous timeout
                 }
             }
         }
@@ -903,6 +1020,7 @@
                         if (platform.x + platform.width > canvas.width) platform.x = canvas.width - platform.width;
                     }
                 }
+                // Disappearing platform update
                 if (platform.type === 'disappearing' && platform.timer > 0) {
                     platform.timer--;
                     if (platform.timer <= 0) {
@@ -911,7 +1029,7 @@
                             platform.active = true;
                             platform.color1 = platform.originalColor1;
                             platform.color2 = platform.originalColor2;
-                        }, platform.reappearTime * 10); 
+                        }, platform.reappearTime * 10); // Reappear after a delay (e.g., 120 frames * 10ms/frame = 1.2 seconds)
                     }
                 }
             }
@@ -921,8 +1039,10 @@
             for (const enemy of enemies) {
                 const platform = platforms[enemy.platformIndex];
                 
+                // Enemy movement
                 enemy.x += enemy.direction * enemy.speed;
 
+                // Reverse enemy direction if it hits platform edges
                 const patrolMargin = 10;
                 if (enemy.x - enemy.size < platform.x + patrolMargin || enemy.x + enemy.size > platform.x + platform.width - patrolMargin) {
                     enemy.direction *= -1;
@@ -958,9 +1078,10 @@
                 }
             }
             if (allCollected && !exitPlatform) {
+                // Exit platform in the lower right corner
                 exitPlatform = {
                     x: canvas.width - 120, 
-                    y: canvas.height - 80, 
+                    y: canvas.height - 80, // Adjusted to be in the lower part (platform height + margin)
                     width: 100,
                     height: 20,
                     color1: '#006400',
@@ -974,7 +1095,7 @@
         function updatePowerUps() {
             for (let i = powerUps.length - 1; i >= 0; i--) {
                 const powerUp = powerUps[i];
-                powerUp.update(); 
+                powerUp.update(); // Update floating animation
 
                 if (powerUp.collected) continue;
 
@@ -985,20 +1106,22 @@
                 if (distance < player.radius + powerUp.radius) {
                     powerUp.collected = true;
                     playPowerUpSound();
-                    score += 2; 
+                    score += 2; // Bonus points for power-up
 
+                    // Apply power-up effect
                     switch (powerUp.type) {
                         case 'invincible':
                             player.invincible = true;
-                            player.invincibleTimer = 300; 
-                            player.canTakeDamage = false; 
-                            clearTimeout(player.damageCooldownTimeout); 
+                            player.invincibleTimer = 300; // 5 seconds (60 frames/sec * 5)
+                            player.canTakeDamage = false; // Player is completely immune
+                            clearTimeout(player.damageCooldownTimeout); // Clear normal damage cooldown if active
                             break;
                         case 'speed':
                             player.speedBoost = true;
-                            player.speedBoostTimer = 300; 
+                            player.speedBoostTimer = 300; // 5 seconds
                             break;
                     }
+                    // Remove power-up visually after collection (by splicing)
                     powerUps.splice(i, 1);
                 }
             }
@@ -1019,13 +1142,15 @@
             
             player.lives--;
             player.canTakeDamage = false;
+            // Clear any existing damage cooldown timeout and invincibility timer
             clearTimeout(player.damageCooldownTimeout); 
             player.invincible = false; 
             player.invincibleTimer = 0;
             
+            // Set a new invulnerability period *after* taking damage
             player.damageCooldownTimeout = setTimeout(() => {
                 player.canTakeDamage = true;
-            }, 1000); 
+            }, 1000); // 1-second invulnerability after respawn/hit
             
             if (player.lives <= 0) {
                 gameOverFinalScore = score;
@@ -1050,11 +1175,12 @@
                 gameState = 'transitioning';
                 transitionCallback = () => {
                     player.x = 50;
+                    // Player spawns directly on the first platform
                     player.y = platforms[0].y - player.radius; 
                     player.vx = 0;
                     player.vy = 0;
                     player.scale = 1;
-                    player.onGround = true; 
+                    player.onGround = true; // Ensure they are on ground
                 };
             }
         }
@@ -1094,12 +1220,14 @@
         function drawGameElements() {
             drawBackground();
             
+            // Draw platforms
             for (const platform of platforms) {
                 if (platform.active) {
                     drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
                 }
             }
             
+            // Draw exit platform
             if (exitPlatform) {
                 drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
                 
@@ -1112,32 +1240,38 @@
                 ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
             }
             
+            // Draw stars
             for (const star of stars) {
                 if (!star.collected) {
                     drawStarWithGradient(star.x, star.y, star.radius, 5, '#FFFF00', '#FFD700', star.scale);
                 }
             }
 
+            // Draw power-ups
             for (const powerUp of powerUps) {
                 powerUp.draw(ctx);
             }
             
+            // Draw enemies
             for (const enemy of enemies) {
                 drawTriangleWithGradient(enemy.x, enemy.y, enemy.size, '#FF0000', '#8B0000');
             }
             
+            // Draw player (with invincibility flash)
             let playerColor1 = '#FFFFFF';
             let playerColor2 = '#87CEEB';
-            if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 5) % 2 === 0) { 
-                playerColor1 = '#FFD700'; 
-                playerColor2 = '#FF4500'; 
+            if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 5) % 2 === 0) { // Flash effect
+                playerColor1 = '#FFD700'; // Gold flash
+                playerColor2 = '#FF4500'; // Orange-red flash
             }
             drawCircleWithGradient(player.x, player.y, player.radius, playerColor1, playerColor2, player.scale);
 
+            // Draw particles
             for (const particle of particles) {
                 particle.draw(ctx);
             }
             
+            // Draw UI (Score, Level, Lives) with outline
             ctx.fillStyle = 'white';
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 3;
@@ -1188,8 +1322,8 @@
         }
 
         function drawPausedScreen() {
-            drawGameElements(); 
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; 
+            drawGameElements(); // Draw game underneath
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark overlay
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             drawScreenMessage("PAUSED", "Press P or ESC to Resume", 'yellow', 'white', 40, 25);
         }
@@ -1256,7 +1390,7 @@
             transitionCallback = null;
             playerCanMove = true;
 
-            particles = []; 
+            particles = []; // Clear particles on reset
             startMusic(); 
         }
         

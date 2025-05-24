@@ -8,3 +8,7 @@ https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/reach_f
 Test:
 
 https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/reach_for_the_stars/master/test.html
+
+Extended:
+
+https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/reach_for_the_stars/master/extented.html

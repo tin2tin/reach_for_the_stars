@@ -544,6 +544,36 @@
             }
         }
         
+        // --- Helper Function for Star Placement ---
+        function isValidStarPosition(x, y, starRadius) {
+            // 1. Check if in UI area
+            if (x < 150 && y < 120) return false;
+
+            // 2. Check if too close to other stars
+            const minStarDistance = starRadius * 2.5; // Minimum distance between star centers
+            for (const existingStar of stars) {
+                const dx = x - existingStar.x;
+                const dy = y - existingStar.y;
+                if (Math.sqrt(dx * dx + dy * dy) < minStarDistance) return false;
+            }
+
+            // 3. Check if on top of an enemy
+            for (const enemy of enemies) {
+                const dx = x - enemy.x;
+                const dy = y - enemy.y;
+                if (Math.sqrt(dx * dx + dy * dy) < enemy.size + starRadius + 10) return false; // Added buffer
+            }
+
+            // 4. Check if on top of a platform
+            for (const platform of platforms) {
+                if (x + starRadius > platform.x && x - starRadius < platform.x + platform.width &&
+                    y + starRadius > platform.y && y - starRadius < platform.y + platform.height) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         function initLevel() {
             platforms = [];
             enemies = [];
@@ -553,12 +583,11 @@
             exitPlatform = null;
             generateBackgroundColors();
             
-            // Green starting platform - Centered at the top, and fixed pixel value
-            const startPlatformWidth = 100;
+            // Green starting platform 
             platforms.push({
-                x: (canvas.width / 2) - (startPlatformWidth / 2), // Centered horizontally
-                y: 100, // Fixed position from top
-                width: startPlatformWidth,
+                x: 20,
+                y: canvas.height * 0.1,
+                width: 100,
                 height: 20,
                 color1: '#006400', 
                 color2: '#004d00', 
@@ -567,8 +596,8 @@
             });
             
             const numDynamicPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
-            const maxY = canvas.height * 0.9;
-            const minY = canvas.height * 0.15;
+            const maxY = canvas.height * 0.9; // Max Y for platforms
+            const minY = platforms[0].y + platforms[0].height + 50; // Min Y for platforms, below starting platform
             const verticalGap = (maxY - minY) / (numDynamicPlatforms + 1);
 
             let dynamicPlatformConfigs = [];
@@ -578,79 +607,44 @@
 
             if (level === 1) {
                 // Only standard moving platforms in Level 1
-                // specialPlatformsToGenerate remains empty
             } else if (level >= 2 && level <= 4) {
-                // Introduce one new type sequentially for levels 2, 3, 4
-                // Level 2: disappearing, Level 3: bouncy, Level 4: conveyor
                 const typeToIntroduce = SPECIAL_PLATFORM_TYPES[level - 2];
                 specialPlatformsToGenerate.push(typeToIntroduce);
             } else if (level >= 5) {
-                // Level 5 onwards: Add two random special platforms
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
             }
 
             // Generate dynamic platform configurations
             for (let i = 0; i < numDynamicPlatforms; i++) {
-                let currentType = 'normal'; // Default to normal moving platform
-                let pColor1 = '#00008B'; // Dark Blue
+                let currentType = 'normal'; 
+                let pColor1 = '#00008B'; 
                 let pColor2 = '#000066';
                 let platformSpeedFactor = (1.0 + Math.random() * 0.5);
                 let isStatic = false;
                 let direction = Math.random() > 0.5 ? 1 : -1;
 
-                // If there are special platforms to add AND we haven't added all of them yet for this level
-                // This logic ensures that if `specialPlatformsToGenerate` is not empty, we prioritize placing those.
-                // We also add a random chance so it's not always the very first platforms.
-                if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3) { 
-                    currentType = specialPlatformsToGenerate.shift(); // Takes the first element
+                if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3 + (i * 0.05) ) { // Increase chance to pick special as we iterate
+                    currentType = specialPlatformsToGenerate.shift(); 
                     switch (currentType) {
-                        case 'disappearing':
-                            pColor1 = '#800080'; // Purple
-                            pColor2 = '#4B0082';
-                            isStatic = false; 
-                            break;
-                        case 'bouncy':
-                            pColor1 = '#32CD32'; // LimeGreen
-                            pColor2 = '#228B22';
-                            isStatic = true; // Bouncy platforms are typically static
-                            platformSpeedFactor = 0; 
-                            break;
-                        case 'conveyor':
-                            pColor1 = '#A9A9A9'; // DarkGrey
-                            pColor2 = '#696969';
-                            isStatic = false;
-                            platformSpeedFactor = (1.0 + Math.random() * 0.5); 
-                            break;
+                        case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
+                        case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
+                        case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; platformSpeedFactor = (1.0 + Math.random() * 0.5); break;
                     }
                 }
 
                 const width = 70 + Math.random() * 150;
-                const y = minY + (i + 1) * verticalGap; // Spread platforms evenly vertically
+                const y = minY + (i + 1) * verticalGap;
                 const x = Math.random() * (canvas.width - width);
 
                 dynamicPlatformConfigs.push({
-                    x,
-                    y,
-                    width,
-                    height: 15,
-                    color1: pColor1,
-                    color2: pColor2,
-                    static: isStatic,
-                    direction,
-                    speed: platformBaseSpeed * platformSpeedFactor,
-                    type: currentType,
-                    originalColor1: pColor1, 
-                    originalColor2: pColor2,
-                    active: true, 
-                    timer: 0, 
-                    reappearTime: 120 
+                    x, y, width, height: 15, color1: pColor1, color2: pColor2,
+                    static: isStatic, direction, speed: platformBaseSpeed * platformSpeedFactor,
+                    type: currentType, originalColor1: pColor1, originalColor2: pColor2,
+                    active: true, timer: 0, reappearTime: 120 
                 });
             }
 
-            // Add any remaining special platforms if they haven't been placed (e.g. if random wasn't picked for existing slots)
-            // This loop ensures that if `specialPlatformsToGenerate` still has items after the main loop,
-            // they are definitively added to the platforms list.
             while(specialPlatformsToGenerate.length > 0) {
                 const currentType = specialPlatformsToGenerate.shift();
                 let pColor1 = '#00008B'; let pColor2 = '#000066';
@@ -663,7 +657,7 @@
                 }
 
                 const width = 70 + Math.random() * 150;
-                const y = minY + Math.random() * (maxY - minY); // Place it randomly within the range if not assigned to an existing slot
+                const y = minY + Math.random() * (maxY - minY); 
                 const x = Math.random() * (canvas.width - width);
 
                 dynamicPlatformConfigs.push({
@@ -674,127 +668,58 @@
                 });
             }
 
-            // Sort by Y to ensure vertical distribution, then add to main array
             dynamicPlatformConfigs.sort((a, b) => a.y - b.y);
             dynamicPlatformConfigs.forEach(config => platforms.push(config));
 
-            // Red gutter platform
             platforms.push({
-                x: 0,
-                y: canvas.height - 20,
-                width: canvas.width,
-                height: 20,
-                color1: '#8B0000',
-                color2: '#660000',
-                static: true,
-                deadly: true,
-                type: 'normal'
+                x: 0, y: canvas.height - 20, width: canvas.width, height: 20,
+                color1: '#8B0000', color2: '#660000', static: true, deadly: true, type: 'normal'
             });
             
-            // --- Enemy and Power-up placement ---
-            // Iterate over dynamic platforms (excluding the initial static platform and the gutter)
             for (let i = 1; i < platforms.length - 1; i++) {
                 const platform = platforms[i];
-
-                // Add enemy to some platforms (less chance on 'bouncy' to avoid frustration)
                 if (Math.random() < (0.3 + (level * 0.05)) && platform.type !== 'bouncy') {
                     enemies.push({
-                        x: platform.x + platform.width / 2,
-                        y: platform.y - 15,
-                        size: 12,
-                        platformIndex: i, // Use the actual index of the platform
-                        direction: Math.random() > 0.5 ? 1 : -1,
+                        x: platform.x + platform.width / 2, y: platform.y - 15, size: 12,
+                        platformIndex: i, direction: Math.random() > 0.5 ? 1 : -1,
                         speed: platformBaseSpeed * (0.5 + Math.random() * 0.5) * 0.5
                     });
                 }
-
-                // Add power-up to some platforms (less frequent than enemies, and not on 'bouncy'/'disappearing')
                 if (Math.random() < 0.08 && platform.type !== 'bouncy' && platform.type !== 'disappearing') {
                     const puType = Math.random() < 0.5 ? 'invincible' : 'speed';
                     powerUps.push(new PowerUp(platform.x + platform.width / 2, platform.y - 20, puType));
                 }
             }
             
-            // Add stars (keep existing logic to avoid overlap with enemies/platforms/powerups)
             const numStars = 5 + level;
+            const starRadius = 15;
             const maxStarY = canvas.height * 2/3;
-            // Define exclusion zone for UI text (Score, Level, Lives are drawn at Y=30, 60, 90)
-            const uiExclusionZoneHeight = 120; 
-
+            
             for (let i = 0; i < numStars; i++) {
-                let valid = false;
+                let attempts = 0; // To prevent infinite loops
                 let starX, starY;
-                let attempts = 0;
-                const maxAttempts = 100; // Prevent infinite loop if no valid spot found
-
-                while (!valid && attempts < maxAttempts) {
-                    starX = 20 + Math.random() * (canvas.width - 40); // 20px margin from left/right
-                    // Ensure star is below UI text and within maxStarY.
-                    // Subtract `star.radius * 2` from the effective range to ensure full star visibility
-                    // without touching boundaries.
-                    starY = uiExclusionZoneHeight + Math.random() * (maxStarY - uiExclusionZoneHeight - (stars.length > 0 ? stars[0].radius : 15) * 2); 
-                    
-                    valid = true;
-
-                    // Check against existing stars (only check active stars)
-                    for (let j = 0; j < stars.length; j++) {
-                        const existingStar = stars[j];
-                        if (existingStar.collected) continue; 
-
-                        const dx = starX - existingStar.x;
-                        const dy = starY - existingStar.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        // Ensure stars are not too close to each other.
-                        // Using star.radius * 2.5 for better visual separation.
-                        if (distance < (stars.length > 0 ? stars[0].radius : 15) * 2.5) { 
-                            valid = false;
-                            break;
-                        }
+                do {
+                    starX = 20 + Math.random() * (canvas.width - 40);
+                    starY = 20 + Math.random() * (maxStarY - 40);
+                    attempts++;
+                    if (attempts > 100) { // Failsafe
+                        console.warn("Could not place a star after 100 attempts. Skipping.");
+                        break; 
                     }
-                    if (!valid) { attempts++; continue; } 
-
-                    // Check against enemies
-                    for (const enemy of enemies) {
-                        const dx = starX - enemy.x;
-                        const dy = starY - enemy.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        if (distance < 30) { valid = false; break; }
-                    }
-                    if (!valid) { attempts++; continue; }
-
-                    // Check against platforms
-                    for (const platform of platforms) {
-                        if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
-                            starY + 10 > platform.y && starY - 10 < platform.y + platform.height) {
-                            valid = false;
-                            break;
-                        }
-                    }
-                    if (!valid) { attempts++; continue; }
-
-                    // Check against power-ups
-                    for (const pu of powerUps) {
-                        const dx = starX - pu.x; const dy = starY - pu.y;
-                        if (Math.sqrt(dx * dx + dy * dy) < 40) { valid = false; break; }
-                    }
-                    if (!valid) { attempts++; continue; }
-                }
-
-                if (valid) { // Only push if a valid spot was found
-                    stars.push({ x: starX, y: starY, radius: 15, scale: 1, collected: false });
-                } else {
-                    console.warn("Could not find a valid position for a star after many attempts.");
+                } while (!isValidStarPosition(starX, starY, starRadius));
+                
+                if (isValidStarPosition(starX, starY, starRadius)) { // Double check after loop
+                    stars.push({ x: starX, y: starY, radius: starRadius, scale: 1, collected: false });
                 }
             }
             
-            // Reset player position: Centered on the first platform
-            player.x = platforms[0].x + platforms[0].width / 2;
-            // Player starts slightly ABOVE the first platform to simulate falling onto it
-            player.y = platforms[0].y - player.radius - 20; 
+            // Reset player position
+            player.x = 50;
+            player.y = platforms[0].y - player.radius; 
             player.vx = 0;
-            player.vy = 0;
+            player.vy = 0; // Ensure no initial velocity
             player.scale = 1;
-            player.onGround = false; // Player is initially in the air, falls onto the platform
+            player.onGround = true; // Player starts on the ground
             player.canTakeDamage = true;
             clearTimeout(player.damageCooldownTimeout);
             player.invincible = false;
@@ -1157,14 +1082,13 @@
                 playerCanMove = false;
                 gameState = 'transitioning';
                 transitionCallback = () => {
-                    // Player respawns centered on the first platform
-                    player.x = platforms[0].x + platforms[0].width / 2;
-                    // Player spawns slightly ABOVE the first platform again
-                    player.y = platforms[0].y - player.radius - 20; 
+                    player.x = 50;
+                    // Player spawns directly on the first platform
+                    player.y = platforms[0].y - player.radius; 
                     player.vx = 0;
-                    player.vy = 0;
+                    player.vy = 0; // Ensure no initial velocity
                     player.scale = 1;
-                    player.onGround = false; // Player falls onto platform
+                    player.onGround = true; // Ensure they are on ground
                 };
             }
         }

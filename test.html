@@ -6,231 +6,212 @@
         body {
             margin: 0;
             display: flex;
+            flex-direction: column; /* Changed to column to stack canvas and buttons */
             justify-content: center;
             align-items: center;
             height: 100vh;
             background: #222;
             overflow: hidden;
-            font-family: sans-serif; /* Added for general text styling */
+            font-family: sans-serif; /* Added a default font */
         }
         canvas {
             border: 2px solid #333;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5); /* Added a subtle shadow */
+            margin-bottom: 15px; /* Space between canvas and buttons */
         }
         #controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
             display: flex;
-            flex-direction: column;
             gap: 10px; /* Space between buttons */
         }
-        #restart, #muteToggle {
-            padding: 5px 10px;
+        button {
+            padding: 8px 15px;
             background: linear-gradient(to bottom, #ff6b6b, #c44d4d);
             border: 2px solid black;
             border-radius: 5px;
             color: white;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
             font-weight: bold;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5); /* Added text shadow for button */
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.3); /* Added box shadow for button */
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
             transition: background 0.3s ease, transform 0.1s ease;
-            white-space: nowrap; /* Prevent text wrapping on button */
+            -webkit-appearance: none; /* Remove default button styles for consistency */
+            -moz-appearance: none;
+            appearance: none;
         }
-        #restart:hover, #muteToggle:hover {
-            background: linear-gradient(to bottom, #ff4d4d, #a93c3c);
+        button:hover {
+            background: linear-gradient(to top, #ff6b6b, #c44d4d);
             transform: translateY(-1px);
         }
-        #restart:active, #muteToggle:active {
+        button:active {
             transform: translateY(1px);
-            box-shadow: 1px 1px 3px rgba(0,0,0,0.3) inset;
+        }
+        #muteButton {
+            background: linear-gradient(to bottom, #6beaff, #4d9bc4); /* Different color for mute button */
+        }
+        #muteButton:hover {
+            background: linear-gradient(to top, #6beaff, #4d9bc4);
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
     <div id="controls">
-        <button id="restart">Restart</button>
-        <button id="muteToggle">Mute</button>
+        <button id="restart">Restart Game</button>
+        <button id="muteButton">Mute Music</button>
     </div>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        // --- Make it use the full height and 40% of the width ---
-        canvas.width = window.innerWidth * 0.4;
-        canvas.height = window.innerHeight;
+        // --- Canvas Dimensions ---
+        canvas.width = window.innerWidth * 0.4; // 40% of width
+        canvas.height = window.innerHeight;      // Full height
         
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth * 0.4;
             canvas.height = window.innerHeight;
-            // Re-center if layout is complex, but for this, canvas handles itself
+            // No need to re-initLevel; player's position is adjusted if falling off,
+            // and game elements will render within the new bounds.
         });
         
         const keys = {};
-        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            // Start audio context and music on first user interaction
+            if (!audioContextStarted) {
+                initAudioContext();
+                audioContextStarted = true;
+            }
+            if (e.key === ' ' && gameState === 'levelComplete') {
+                level++;
+                platformSpeed += 0.1;
+                gameState = 'playing';
+                initLevel();
+                // Optionally stop level complete sound if it's still playing
+            } else if (e.key === ' ' && gameState === 'gameOver') {
+                resetGame();
+            }
+        });
         window.addEventListener('keyup', e => keys[e.key] = false);
+
         document.getElementById('restart').addEventListener('click', resetGame);
         
-        // --- Add a mute button below the reset game button ---
-        const muteButton = document.getElementById('muteToggle');
+        // --- Audio Setup ---
+        let audioContext = null;
+        let audioContextStarted = false;
         let isMuted = false;
-        let audioContext = null; // Will be initialized on first interaction
-        
+        let music = new Audio('https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Sip%20of%20Comfort.mp3');
+        music.loop = true;
+        music.volume = 0.5; // Initial volume
+
+        const muteButton = document.getElementById('muteButton');
+        muteButton.addEventListener('click', toggleMute);
+
+        // This function will be called on the first user interaction (keydown or click)
         function initAudioContext() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                // Attempt to resume context if it's suspended (common browser policy)
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume().then(() => {
-                        console.log('AudioContext resumed successfully');
-                    }).catch(e => {
-                        console.error('Failed to resume AudioContext:', e);
-                    });
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            // Start music only after user gesture and audio context is ready
+            if (!isMuted) {
+                music.play().catch(e => console.error("Music autoplay prevented:", e));
+            }
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            muteButton.textContent = isMuted ? 'Unmute Music' : 'Mute Music';
+            if (isMuted) {
+                music.pause();
+                music.currentTime = 0; // Reset music to start from beginning when unmuted
+            } else {
+                if (audioContextStarted) { // Only play if context has been initialized
+                    music.play().catch(e => console.error("Music autoplay prevented after unmute:", e));
                 }
             }
         }
 
-        muteButton.addEventListener('click', () => {
-            initAudioContext(); // Ensure audio context is ready on first click
-            isMuted = !isMuted;
-            muteButton.textContent = isMuted ? 'Unmute' : 'Mute';
-            console.log('Muted:', isMuted);
-        });
+        // Programmatic Sound Effects (Web Audio API)
+        // A generic function to create and play a simple oscillator tone
+        function createOscillator(frequency, type, duration, volume, startTimeOffset = 0) {
+            if (isMuted || !audioContext) return;
 
-        // --- Add fitting sounds, no drone or music, only coded effect sounds ---
-        // Helper to play a generic sound with ADSR envelope
-        function playSound(frequency, duration, type = 'sine', volume = 0.1, attack = 0.01, decay = 0.1) {
-            if (isMuted || !audioContext) {
-                return;
-            }
-
-            const oscillator = audioContext.createOscillator();
+            const osc = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
 
-            oscillator.type = type;
-            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            osc.type = type; // sine, square, sawtooth, triangle
+            osc.frequency.setValueAtTime(frequency, audioContext.currentTime + startTimeOffset);
 
-            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + attack);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + attack + decay);
+            gainNode.gain.setValueAtTime(volume, audioContext.currentTime + startTimeOffset);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + startTimeOffset + duration);
 
-            oscillator.connect(gainNode);
+            osc.connect(gainNode);
             gainNode.connect(audioContext.destination);
 
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + attack + decay);
+            osc.start(audioContext.currentTime + startTimeOffset);
+            osc.stop(audioContext.currentTime + startTimeOffset + duration);
         }
 
         function playJumpSound() {
-            initAudioContext();
-            playSound(500, 0.1, 'sine', 0.1, 0.01, 0.09); // Quick high tone
+            createOscillator(440, 'triangle', 0.1, 0.4); // A4, short, clear
         }
 
         function playLandSound() {
-            initAudioContext();
-            playSound(150, 0.08, 'sine', 0.08, 0.01, 0.04); // Low, short thud
+            createOscillator(180, 'sawtooth', 0.1, 0.5); // Low rumble, short
         }
 
         function playStarCollectSound() {
-            initAudioContext();
-            if (isMuted || !audioContext) return;
-            const frequencies = [660, 880, 1100]; // E5, A5, C6
-            let delay = 0;
-            frequencies.forEach((freq, index) => {
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(freq, audioContext.currentTime + delay);
-                
-                gainNode.gain.setValueAtTime(0, audioContext.currentTime + delay);
-                gainNode.gain.linearRampToValueAtTime(0.08, audioContext.currentTime + delay + 0.01);
-                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + delay + 0.05);
-
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-
-                oscillator.start(audioContext.currentTime + delay);
-                oscillator.stop(audioContext.currentTime + delay + 0.08);
-
-                delay += 0.05; // Small delay between notes
-            });
-        }
-
-        function playDieSound() {
-            initAudioContext();
-            if (isMuted || !audioContext) return;
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.type = 'square';
-            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
-            oscillator.frequency.linearRampToValueAtTime(50, audioContext.currentTime + 0.3); // Falling pitch
-            
-            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.4); // Fade out
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.4);
-        }
-
-        function playLevelCompleteSound() {
-            initAudioContext();
             if (isMuted || !audioContext) return;
             const frequencies = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
             let delay = 0;
-            frequencies.forEach((freq, index) => {
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(freq, audioContext.currentTime + delay);
-                
-                gainNode.gain.setValueAtTime(0, audioContext.currentTime + delay);
-                gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + delay + 0.05);
-                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + delay + 0.2);
-
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-
-                oscillator.start(audioContext.currentTime + delay);
-                oscillator.stop(audioContext.currentTime + delay + 0.25);
-
-                delay += 0.15; // Small delay between notes for an arpeggio
-            });
+            for (let i = 0; i < frequencies.length; i++) {
+                createOscillator(frequencies[i], 'sine', 0.1, 0.3, delay);
+                delay += 0.05;
+            }
         }
 
-        function playGameOverSound() {
-            initAudioContext();
+        function playPlayerDieSound() {
             if (isMuted || !audioContext) return;
-            const frequencies = [100, 75, 50]; // Low, falling dissonant tones
+            const osc = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(220, audioContext.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(80, audioContext.currentTime + 0.4); // Descending pitch
+
+            gainNode.gain.setValueAtTime(0.6, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+
+            osc.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.5);
+        }
+
+        function playLevelCompleteSound() {
+            if (isMuted || !audioContext) return;
+            const frequencies = [660, 780, 990, 1320]; // E5, G5, B5, E6 (triumphant arpeggio)
             let delay = 0;
-            frequencies.forEach((freq, index) => {
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.type = 'sawtooth';
-                oscillator.frequency.setValueAtTime(freq, audioContext.currentTime + delay);
-                
-                gainNode.gain.setValueAtTime(0, audioContext.currentTime + delay);
-                gainNode.gain.linearRampToValueAtTime(0.15, audioContext.currentTime + delay + 0.05);
-                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + delay + 0.5);
-
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-
-                oscillator.start(audioContext.currentTime + delay);
-                oscillator.stop(audioContext.currentTime + delay + 0.6);
-
-                delay += 0.2; // Delay for a dissonant feel
-            });
+            for (let i = 0; i < frequencies.length; i++) {
+                createOscillator(frequencies[i], 'sine', 0.2, 0.4, delay);
+                delay += 0.1;
+            }
         }
         
+        function playGameOverSound() {
+            if (isMuted || !audioContext) return;
+            const frequencies = [200, 150, 100]; // Low, ominous tones
+            let delay = 0;
+            for (let i = 0; i < frequencies.length; i++) {
+                createOscillator(frequencies[i], 'sawtooth', 0.4, 0.5, delay);
+                delay += 0.15;
+            }
+        }
+
+
         let player = {
             x: 50,
             y: 50,
@@ -238,6 +219,7 @@
             vx: 0,
             vy: 0,
             onGround: false,
+            wasOnGround: false, // For detecting first contact with ground to play land sound
             lives: 3,
             scale: 1
         };
@@ -271,6 +253,15 @@
                     backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
                     break;
             }
+        }
+        
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            backgroundColors.forEach((color, index) => {
+                gradient.addColorStop(index / (backgroundColors.length - 1), color);
+            });
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
         
         function drawCircleWithGradient(x, y, radius, color1, color2, scale = 1) {
@@ -356,10 +347,10 @@
             exitPlatform = null;
             generateBackgroundColors();
             
-            // Starting platform (adjusted Y to be visible from top)
+            // Starting platform
             platforms.push({
                 x: 20,
-                y: canvas.height * 0.1, 
+                y: canvas.height * 0.1, // Adjusted starting platform y for full height
                 width: 100,
                 height: 20,
                 color1: '#006400',
@@ -368,9 +359,9 @@
             });
             
             // Moving platforms
-            const numPlatforms = 8 + Math.floor(Math.random() * 4);
+            const numPlatforms = 8 + Math.floor(Math.random() * 4) + Math.floor(level / 2); // More platforms for higher levels
             const maxY = canvas.height * 0.9;
-            const minY = canvas.height * 0.15; 
+            const minY = canvas.height * 0.15; // Start platforms a bit lower than the start
             const stepY = (maxY - minY) / numPlatforms;
             
             for (let i = 0; i < numPlatforms; i++) {
@@ -392,17 +383,17 @@
                 });
                 
                 // Add enemy to some platforms
-                if (Math.random() < 0.3) {
+                if (Math.random() < 0.3 + (level * 0.05)) { // More enemies for higher levels
                     enemies.push({
                         x: x + width / 2,
-                        y: y - 15, // Enemy size is 12, so -15 puts it just above
+                        y: y - 15, // Initial y for enemy
                         size: 12,
                         platformIndex: platforms.length - 1
                     });
                 }
             }
             
-            // Red gutter platform
+            // Red gutter platform at the very bottom
             platforms.push({
                 x: 0,
                 y: canvas.height - 20,
@@ -432,7 +423,7 @@
                         const dx = starX - enemy.x;
                         const dy = starY - enemy.y;
                         const distance = Math.sqrt(dx * dx + dy * dy);
-                        if (distance < 30) {
+                        if (distance < 30) { // If too close to an enemy, find a new spot
                             valid = false;
                             break;
                         }
@@ -450,14 +441,13 @@
             
             // Reset player position
             player.x = 50;
-            player.y = 50;
+            player.y = canvas.height * 0.1 - player.radius; // Position on starting platform
             player.vx = 0;
             player.vy = 0;
             player.scale = 1;
-            prevOnGround = false; // Reset for new level
+            player.onGround = false;
+            player.wasOnGround = false;
         }
-        
-        let prevOnGround = false; // To detect landing event for bounce
         
         function update() {
             if (gameState === 'playing') {
@@ -466,33 +456,30 @@
                 updateEnemies();
                 updateStars();
                 checkExitPlatform();
-            } else if (gameState === 'levelComplete' && keys[' ']) {
-                level++;
-                platformSpeed += 0.1;
-                gameState = 'playing';
-                initLevel();
-            } else if (gameState === 'gameOver' && keys[' ']) {
-                resetGame();
-            }
+            } 
+            // Level complete and Game Over logic is handled by keydown listener for SPACE.
         }
         
         function updatePlayer() {
+            // Store previous onGround state before updating current
+            player.wasOnGround = player.onGround;
+            player.onGround = false; // Reset for current frame, will be set true if colliding with a platform
+            
             // Horizontal movement
             if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.2, -3);
             else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.2, 3);
-            else player.vx *= 0.9;
+            else player.vx *= 0.9; // Apply friction
             
             player.x += player.vx;
             
-            // Jumping
-            if (keys[' '] && player.onGround) {
+            // Jumping: Only jump if player is on ground (or was on ground last frame)
+            if (keys[' '] && player.wasOnGround) {
                 player.vy = -7;
-                player.onGround = false;
                 playJumpSound();
             }
             
             // Gravity
-            player.vy += 0.3;
+            player.vy += 0.3; // Gravity acceleration
             player.y += player.vy;
             
             // Boundary check
@@ -506,63 +493,58 @@
             }
             
             // Platform collision
-            let landedOnPlatformThisFrame = false; // Flag to track if player landed on ANY platform this frame
             for (const platform of platforms) {
+                // Check if player is overlapping with platform horizontally and vertically
                 if (player.y + player.radius > platform.y && 
                     player.y - player.radius < platform.y + platform.height &&
                     player.x + player.radius > platform.x && 
                     player.x - player.radius < platform.x + platform.width) {
                     
-                    // Top collision (landing)
-                    if (player.vy > 0 && player.y < platform.y) {
-                        player.y = platform.y - player.radius;
-                        
-                        // --- Correct the bounce, so it only bounces once it hits a platform ---
-                        if (!prevOnGround) { // Only apply bounce if player was NOT on ground in the previous frame
-                             player.vy = -player.vy * 0.2; // Small bounce
-                             playLandSound();
-                        } else {
-                            player.vy = 0; // If already on ground, just stop vertical movement
+                    // Top collision (landing on a platform)
+                    if (player.vy > 0 && player.y < platform.y) { // Only if falling and above the platform
+                        player.y = platform.y - player.radius; // Snap to top of platform
+                        player.vy = -player.vy * 0.2; // Small bounce (0.2 is 20% of incoming velocity)
+
+                        // Play land sound only on the *first* frame of contact
+                        if (!player.wasOnGround) { 
+                           playLandSound();
                         }
-                        
                         player.onGround = true;
-                        landedOnPlatformThisFrame = true;
                         
-                        // Squeeze animation
+                        // Squeeze animation for landing
                         player.scale = 0.9;
                         setTimeout(() => player.scale = 1, 100);
                         
-                        // Move with platform
+                        // Move player with moving platform
                         if (!platform.static) {
                             player.x += platform.direction * platform.speed;
                         }
                         
-                        // Check if deadly platform
+                        // Check if platform is deadly (e.g., the red gutter)
                         if (platform.deadly) {
                             playerDie();
                         }
+                    } else if (player.vy < 0 && player.y - player.radius < platform.y + platform.height && player.y > platform.y) {
+                        // Bottom collision (hitting head on platform)
+                        player.y = platform.y + platform.height + player.radius;
+                        player.vy = 0; // Stop upward movement
                     }
                 }
             }
             
-            // Update onGround status for next frame's check
-            prevOnGround = player.onGround;
-            if (!landedOnPlatformThisFrame) { // If no platform was landed on this frame, player is not on ground
-                player.onGround = false;
-            }
-
             // Enemy collision
             for (const enemy of enemies) {
                 const dx = player.x - enemy.x;
                 const dy = player.y - enemy.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
-                if (distance < player.radius + enemy.size) {
+                // Collision detection with enemy (adjusted radius slightly)
+                if (distance < player.radius + enemy.size * 0.7) { 
                     playerDie();
                 }
             }
             
-            // Fall off screen
+            // Fall off screen (below the gutter)
             if (player.y > canvas.height + 50) {
                 playerDie();
             }
@@ -574,7 +556,7 @@
                 if (!platform.static) {
                     platform.x += platform.direction * platform.speed;
                     
-                    // Reverse direction at edges
+                    // Reverse direction when platform hits canvas edges
                     if (platform.x <= 0 || platform.x + platform.width >= canvas.width) {
                         platform.direction *= -1;
                     }
@@ -585,8 +567,10 @@
         function updateEnemies() {
             for (const enemy of enemies) {
                 const platform = platforms[enemy.platformIndex];
-                // Enemies stick to the center of their platform
+                // Enemies follow their platforms horizontally
                 enemy.x = platform.x + platform.width / 2;
+                // Add a simple up/down floating movement to enemies
+                enemy.y = platform.y - 15 + Math.sin(performance.now() * 0.005 * level) * 5; 
             }
         }
         
@@ -597,18 +581,19 @@
                 const star = stars[i];
                 
                 if (!star.collected) {
-                    allCollected = false;
+                    allCollected = false; // At least one star is not collected
                     
                     const dx = player.x - star.x;
                     const dy = player.y - star.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     
+                    // Check if player collects a star
                     if (distance < player.radius + star.radius * star.scale * 0.7) {
                         star.collected = true;
                         score += 1;
                         playStarCollectSound();
                         
-                        // Animate star collection
+                        // Animate star shrinking/disappearing
                         (function animateStar(starIndex, scaleValue) {
                             stars[starIndex].scale = scaleValue;
                             if (scaleValue > 0.1) {
@@ -619,10 +604,11 @@
                 }
             }
             
+            // If all stars are collected, create the exit platform if it doesn't exist
             if (allCollected && !exitPlatform) {
                 exitPlatform = {
-                    x: canvas.width - 120,
-                    y: canvas.height - 80,
+                    x: canvas.width - 120, // Position towards the right
+                    y: canvas.height * 0.9 - 20, // A bit above the bottom gutter
                     width: 100,
                     height: 20,
                     color1: '#006400',
@@ -633,26 +619,27 @@
         }
         
         function playerDie() {
-            if (player.lives > 0) { // Only play sound if actually losing a life
-                playDieSound();
-            }
             player.lives--;
+            playPlayerDieSound(); // Play death sound
             
             if (player.lives <= 0) {
                 gameState = 'gameOver';
-                playGameOverSound();
+                playGameOverSound(); // Play game over sound
             } else {
-                // Animate player shrinking
+                // Animate player shrinking and then reset position for next life
                 (function animatePlayerDeath(scale) {
                     player.scale = scale;
                     if (scale > 0.1) {
                         requestAnimationFrame(() => animatePlayerDeath(scale - 0.1));
                     } else {
+                        // Reset player state after death animation
                         player.x = 50;
-                        player.y = 50;
+                        player.y = canvas.height * 0.1 - player.radius; // Reset to starting platform
                         player.vx = 0;
                         player.vy = 0;
-                        player.scale = 1;
+                        player.scale = 1; // Back to normal size
+                        player.onGround = false; 
+                        player.wasOnGround = false;
                     }
                 })(1);
             }
@@ -665,34 +652,16 @@
                     player.x + player.radius > exitPlatform.x && 
                     player.x - player.radius < exitPlatform.x + exitPlatform.width) {
                     
-                    if (gameState !== 'levelComplete') { // Prevent multiple sound plays
-                        playLevelCompleteSound();
+                    // Transition to level complete state
+                    if (gameState === 'playing') { // Only trigger once per level completion
+                        gameState = 'levelComplete';
+                        score += 5; // Bonus points for completing level
+                        playLevelCompleteSound(); // Play level complete sound
                     }
-                    gameState = 'levelComplete';
-                    score += 5; // 5 points for completing level
                 }
             }
         }
         
-        // Helper function for drawing outlined text
-        function drawOutlinedText(text, x, y, font, fillStyle, strokeStyle = 'black', lineWidth = 2) {
-            ctx.font = font;
-            ctx.lineWidth = lineWidth;
-            ctx.strokeStyle = strokeStyle;
-            ctx.strokeText(text, x, y);
-            ctx.fillStyle = fillStyle;
-            ctx.fillText(text, x, y);
-        }
-
-        function drawBackground() {
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            backgroundColors.forEach((color, index) => {
-                gradient.addColorStop(index / (backgroundColors.length - 1), color);
-            });
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
         function draw() {
             drawBackground();
             
@@ -705,9 +674,14 @@
             if (exitPlatform) {
                 drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
                 
-                // --- Make the texts white with a black outline ---
-                ctx.textAlign = 'center'; // Center text on platform
-                drawOutlinedText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 5, 'bold 16px Arial', 'yellow');
+                // Draw EXIT text with outline
+                ctx.fillStyle = 'yellow';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.font = 'bold 20px Arial'; 
+                ctx.textAlign = 'center';
+                ctx.strokeText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
+                ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
             }
             
             // Draw stars
@@ -725,24 +699,46 @@
             // Draw player
             drawCircleWithGradient(player.x, player.y, player.radius, '#FFFFFF', '#87CEEB', player.scale);
             
-            // Draw UI
-            // --- Make the texts white with a black outline ---
-            ctx.textAlign = 'left'; // UI text is left-aligned
-            drawOutlinedText(`Score: ${score}`, 10, 20, '16px Arial', 'white');
-            drawOutlinedText(`Level: ${level}`, 10, 40, '16px Arial', 'white');
-            drawOutlinedText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 60, '16px Arial', 'white');
+            // Draw UI (Score, Level, Lives)
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3; // Thicker outline for UI text
+            ctx.font = 'bold 18px Arial'; 
+            ctx.textAlign = 'left';
+
+            ctx.strokeText(`Score: ${score}`, 10, 25);
+            ctx.fillText(`Score: ${score}`, 10, 25);
+
+            ctx.strokeText(`Level: ${level}`, 10, 50);
+            ctx.fillText(`Level: ${level}`, 10, 50);
+
+            ctx.strokeText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 75);
+            ctx.fillText(`Lives: ${'❤️'.repeat(player.lives)}`, 10, 75);
             
-            // Draw game state messages
+            // Draw game state messages (Level Complete, Game Over)
+            ctx.lineWidth = 4; // Even thicker outline for game state messages
             if (gameState === 'levelComplete') {
-                // --- Make the texts white with a black outline ---
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 30px Arial';
                 ctx.textAlign = 'center';
-                drawOutlinedText(`Get ready for level: ${level + 1}`, canvas.width / 2, canvas.height / 2, 'bold 24px Arial', 'white');
-                drawOutlinedText('Press SPACE to continue', canvas.width / 2, canvas.height / 2 + 30, '20px Arial', 'white');
+                ctx.strokeText(`Level ${level} Complete!`, canvas.width / 2, canvas.height / 2 - 20);
+                ctx.fillText(`Level ${level} Complete!`, canvas.width / 2, canvas.height / 2 - 20);
+                
+                ctx.font = 'bold 24px Arial';
+                ctx.strokeText(`Press SPACE for Level ${level + 1}`, canvas.width / 2, canvas.height / 2 + 20);
+                ctx.fillText(`Press SPACE for Level ${level + 1}`, canvas.width / 2, canvas.height / 2 + 20);
+
             } else if (gameState === 'gameOver') {
-                // --- Make the texts white with a black outline ---
+                ctx.fillStyle = 'red';
+                ctx.font = 'bold 36px Arial';
                 ctx.textAlign = 'center';
-                drawOutlinedText('GAME OVER', canvas.width / 2, canvas.height / 2, 'bold 32px Arial', 'red');
-                drawOutlinedText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 40, '24px Arial', 'white');
+                ctx.strokeText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
+                
+                ctx.fillStyle = 'white'; // Change text color for restart message
+                ctx.font = 'bold 28px Arial';
+                ctx.strokeText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 30);
+                ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 30);
             }
         }
         
@@ -761,7 +757,7 @@
             requestAnimationFrame(gameLoop);
         }
         
-        // Initial setup
+        // Initial setup for the game
         initLevel();
         gameLoop();
     </script>

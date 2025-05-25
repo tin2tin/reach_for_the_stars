@@ -106,13 +106,3 @@ This game is a single HTML file and requires no complex setup.
 *   **HTML:** Structures the game canvas and control buttons.
 *   **CSS:** Styles the page, canvas, and implements responsive design for mobile controls.
 *   **JavaScript:** Powers all game logic, physics, drawing on the canvas, level generation, audio, and managing game states.
-
-## Contributing
-
-Feel free to fork this repository, suggest improvements, or submit pull requests.
-
-## License
-
-This project is open-source and available under the [MIT License](LICENSE).
-
----

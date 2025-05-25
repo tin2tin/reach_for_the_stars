@@ -2,21 +2,31 @@
 <html>
 <head>
     <title>Platform Game</title>
+    <!-- Essential for mobile responsiveness and full-screen behavior -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body {
             margin: 0;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            /* Stack canvas and mobile controls vertically on small screens */
+            flex-direction: column;
+            justify-content: center; /* Center content vertically initially */
+            align-items: center; /* Center content horizontally */
+            height: 100vh; /* Full viewport height */
+            width: 100vw;  /* Full viewport width */
             background: #222;
-            overflow: hidden;
-            flex-direction: column; /* To stack canvas and buttons vertically */
+            overflow: hidden; /* Prevent scrolling */
         }
         canvas {
             border: 2px solid #333;
-            background: #000; /* Fallback for transparency issues if any */
-            /* max-width and max-height will be controlled by media queries more specifically */
+            background: #000;
+            /* Canvas internal resolution is set in JS. CSS handles scaling to fit screen. */
+            max-width: 100%; /* Allow canvas to take full width of its container */
+            max-height: 100%; /* Allow canvas to take full height of its container */
+            object-fit: contain; /* Scale the canvas to fit while maintaining aspect ratio */
+            display: block; /* Remove extra space below inline elements */
+            flex-shrink: 0; /* Prevent it from shrinking beyond its content */
+            flex-grow: 1; /* Allow it to grow to fill available space */
         }
         #controls {
             position: absolute;
@@ -47,28 +57,36 @@
 
         /* --- Mobile Controls Styling --- */
         #mobile-controls {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            display: none; /* Hidden by default */
-            justify-content: space-between;
-            align-items: flex-end;
+            /* Position relative to flow with flexbox on mobile */
+            position: relative;
+            width: 100%; /* Take full width of the parent (body) */
+            padding: 15px 20px; /* Spacing around the buttons */
+            box-sizing: border-box; /* Include padding in width calculation */
+            display: none; /* Hidden by default, shown via media query */
+            justify-content: space-between; /* Space out button groups */
+            align-items: flex-end; /* Align buttons to the bottom of their row */
             z-index: 10;
+            flex-shrink: 0; /* Prevent it from shrinking */
         }
 
         #mobile-controls .control-group {
             display: flex;
-            gap: 10px;
+            gap: 15px; /* Space between left/right buttons */
         }
 
         #mobile-controls button {
-            padding: 15px 25px;
+            /* Fixed size for consistent look */
+            width: 70px;
+            height: 70px;
+            display: flex; /* Use flex to center text inside button */
+            justify-content: center;
+            align-items: center;
+            padding: 0; /* Remove default padding as size is fixed */
             background: linear-gradient(to bottom, #4CAF50, #2E8B57); /* Greenish for controls */
             border: 2px solid black;
             border-radius: 50%; /* Make them circular */
             color: white;
-            font-size: 18px;
+            font-size: 24px; /* Larger font for mobile readability */
             font-weight: bold;
             cursor: pointer;
             box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
@@ -84,26 +102,29 @@
             box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5);
         }
 
-        /* Show mobile controls and adjust layout for smaller/mobile screens */
+        /* Adjust layout for smaller screens (e.g., typical mobile viewport) */
         @media (max-width: 768px) {
             #mobile-controls {
-                display: flex;
+                display: flex; /* Show mobile controls */
+            }
+            #controls {
+                display: none; /* Hide desktop controls on mobile */
             }
             body {
-                 flex-direction: column;
-                 justify-content: flex-start; /* Align canvas to top */
-                 align-items: center; /* Center canvas horizontally */
+                 flex-direction: column; /* Stack canvas and mobile controls */
+                 justify-content: space-between; /* Canvas takes top, controls take bottom */
+                 align-items: center; /* Center horizontally */
+                 height: 100vh; /* Ensure body takes full viewport height */
+                 width: 100vw; /* Ensure body takes full viewport width */
             }
             canvas {
-                /* JS will set width=100vw for Android portrait. CSS ensures it fits. */
-                max-width: 100%;
-                /* Ensure space for mobile controls at the bottom */
-                max-height: calc(100vh - 120px); /* Approx height of controls + padding */
-                margin-top: 10px; /* Some margin from the top edge */
-            }
-            #controls { /* Top right controls (Restart, Mute) */
-                top: 5px;
-                right: 5px;
+                /* On mobile, canvas should take full width, and scale its height */
+                width: 100vw; /* Maximize width */
+                height: auto; /* Allow height to adjust to maintain aspect ratio */
+                flex-grow: 1; /* Allows it to take remaining vertical space */
+                object-fit: contain; /* Scale down to fit, maintaining aspect ratio */
+                margin-top: 10px; /* Small margin from top */
+                margin-bottom: 10px; /* Small margin from mobile controls */
             }
         }
     </style>
@@ -114,11 +135,11 @@
         <button id="mute-button" class="control-button">Mute Music</button>
     </div>
     <canvas id="gameCanvas"></canvas>
-
+    
     <div id="mobile-controls">
         <div class="control-group">
-            <button id="left-btn">←</button>
-            <button id="right-btn">→</button>
+            <button id="left-btn">LEFT</button> <!-- Changed from emoji -->
+            <button id="right-btn">RIGHT</button> <!-- Changed from emoji -->
         </div>
         <button id="jump-btn">JUMP</button>
     </div>
@@ -126,116 +147,60 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-
-        // --- Attempt to lock orientation to portrait on mobile ---
-        if (screen.orientation && typeof screen.orientation.lock === 'function') {
-            screen.orientation.lock('portrait-primary').catch(err => {
-                // console.log("Orientation lock failed (this is often expected, e.g., in iframes):", err);
-            });
-        }
-
-        // --- Helper functions for device state ---
-        function isAndroid() {
-            return navigator.userAgent.toLowerCase().indexOf("android") > -1;
-        }
-
-        function isPortrait() {
-            // Check if height is greater than width for portrait.
-            // For cases where window.orientation is available (older mobile browsers):
-            if (typeof window.orientation !== "undefined") {
-                return Math.abs(window.orientation) === 0 || Math.abs(window.orientation) === 180;
-            }
-            // Fallback to comparing innerWidth and innerHeight
-            return window.innerHeight > window.innerWidth;
-        }
-
-        // --- Canvas Size Function ---
-        function updateCanvasSize() {
-            const mobileControlsHeightEstimate = 120; // Matches CSS calc approx
-
-            if (isAndroid() && isPortrait()) {
-                canvas.width = window.innerWidth;
-                const mobileControlsElement = document.getElementById('mobile-controls');
-                // Check if mobile controls are actually displayed (based on CSS media query)
-                if (window.getComputedStyle(mobileControlsElement).display !== 'none') {
-                    canvas.height = window.innerHeight - mobileControlsHeightEstimate;
-                } else {
-                    // If mobile controls are not shown, use full height (less likely in portrait Android)
-                    canvas.height = window.innerHeight;
-                }
-                // Ensure a minimum practical game size
-                if (canvas.height < 250) canvas.height = 250;
-                if (canvas.width < 200) canvas.width = 200;
-
-            } else {
-                // Original desktop-like sizing logic (tall aspect ratio)
-                let targetWidth = window.innerWidth * 0.45; // Slightly wider than 0.4 for better feel
-                if (window.innerWidth < 768 && window.innerWidth > window.innerHeight) { // Small landscape
-                    targetWidth = window.innerWidth * 0.7;
-                }
-
-                if (targetWidth < 320) targetWidth = 320; // Min width
-                if (targetWidth > 700) targetWidth = 700; // Max width to keep it somewhat narrow
-                canvas.width = Math.floor(targetWidth); // Use integers for canvas dimensions
-                canvas.height = Math.floor(window.innerHeight);
-            }
-        }
-
-        updateCanvasSize(); // Initial size setting
-
-        window.addEventListener('resize', () => {
-            updateCanvasSize();
-            // initLevel(); // Avoid calling initLevel on resize to preserve game state.
-                         // The game elements are mostly positioned relative to canvas dimensions.
-            draw(); // Redraw with new dimensions
-        });
-
+        
+        // --- Canvas Size (Fixed internal resolution for consistent game world) ---
+        // All game elements will be drawn relative to these dimensions.
+        // CSS will then scale this drawing surface to fit the screen.
+        const GAME_RESOLUTION_WIDTH = 400; // A good width for portrait mobile
+        const GAME_RESOLUTION_HEIGHT = 700; // A good height for portrait mobile
+        
+        canvas.width = GAME_RESOLUTION_WIDTH;
+        canvas.height = GAME_RESOLUTION_HEIGHT;
+        
+        // The window resize listener is no longer needed to change canvas.width/height directly.
+        // CSS handles the visual scaling. We might keep `draw()` call for layout adjustments.
+        window.addEventListener('resize', draw); // Only redraw if elements depend on window size
+        
         const keys = {};
         window.addEventListener('keydown', e => {
             keys[e.key] = true;
-            if (e.key === ' ') e.preventDefault();
+            if (e.key === ' ') e.preventDefault(); 
         });
         window.addEventListener('keyup', e => keys[e.key] = false);
-
+        
         document.getElementById('restart').addEventListener('click', () => {
             if (gameState === 'gameOver' || confirm("Are you sure you want to restart? Your progress will be lost.")) {
                 resetGame();
             }
         });
-
+        
         // --- Audio Setup ---
         let audioContext;
         let bgMusic;
         let isMuted = false;
-
+        
         function createOscillatorSound(frequency, duration, type = 'sine', startTime = 0) {
             if (isMuted) return;
-            if (gameState !== 'playing' && gameState !== 'levelComplete' && gameState !== 'start') return; // Allow sound on start screen interaction for music
-
+            if (gameState !== 'playing' && gameState !== 'levelComplete') return; 
+            
             if (!audioContext) {
-                try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                } catch (e) {
-                    console.warn("Web Audio API is not supported or could not be initialized.", e);
-                    return;
-                }
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
-            if (!audioContext) return; // Still no context
-
+            
             const actualStartTime = startTime === 0 ? audioContext.currentTime : audioContext.currentTime + startTime;
 
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
-
+            
             oscillator.type = type;
             oscillator.frequency.setValueAtTime(frequency, actualStartTime);
-
+            
             gainNode.gain.setValueAtTime(0.5, actualStartTime);
             gainNode.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration);
-
+            
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-
+            
             oscillator.start(actualStartTime);
             oscillator.stop(actualStartTime + duration);
         }
@@ -258,21 +223,14 @@
                 bgMusic.muted = isMuted;
             }
             muteButton.textContent = isMuted ? 'Unmute Music' : 'Mute Music';
-            if (!isMuted && bgMusic && bgMusic.paused && (gameState === 'playing' || gameState === 'levelComplete')) {
+            if (!isMuted && bgMusic && bgMusic.paused && gameState === 'playing') {
                 bgMusic.play().catch(e => console.error("Music autoplay failed after unmuting:", e));
             } else if (isMuted && bgMusic && !bgMusic.paused) {
                 bgMusic.pause();
             }
         }
-
+        
         function startMusic() {
-            if (!audioContext) { // Try to initialize AudioContext on first interaction if not already done
-                 try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                } catch (e) {
-                    console.warn("Web Audio API not supported, music/sounds may not work.", e);
-                }
-            }
             if (!bgMusic) {
                 bgMusic = new Audio('https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Cycling%20Platforms.mp3');
                 bgMusic.loop = true;
@@ -280,31 +238,17 @@
             }
             bgMusic.muted = isMuted;
             if (!isMuted && bgMusic.paused) {
-                bgMusic.play().catch(e => console.warn("Music autoplay failed (often requires user interaction first):", e));
+                bgMusic.play().catch(e => console.error("Music autoplay failed:", e));
             }
         }
 
-        // Try to start music on any first click/touch on the body to comply with autoplay policies
-        document.body.addEventListener('click', function oneTimeMusicStart() {
+        document.body.addEventListener('click', () => {
             if (!audioContext) {
-                 try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                } catch (e) { /* warnings handled in createOscillatorSound */ }
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
             startMusic();
-            document.body.removeEventListener('click', oneTimeMusicStart); // Run only once
         }, { once: true });
-        document.body.addEventListener('touchstart', function oneTimeMusicStartTouch() {
-             if (!audioContext) {
-                 try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                } catch (e) { /* warnings handled in createOscillatorSound */ }
-            }
-            startMusic();
-            document.body.removeEventListener('touchstart', oneTimeMusicStartTouch);
-        }, { once: true });
-
-
+        
         // --- Mobile Controls Event Listeners ---
         const leftBtn = document.getElementById('left-btn');
         const rightBtn = document.getElementById('right-btn');
@@ -312,23 +256,23 @@
 
         function setupTouchControl(btn, key) {
             btn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
+                e.preventDefault(); 
                 keys[key] = true;
-            }, { passive: false });
+            });
             btn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 keys[key] = false;
-            }, { passive: false });
-            // Fallback for mouse interaction on touch devices if needed, or for testing
-            btn.addEventListener('mousedown', (e) => { e.preventDefault(); keys[key] = true; });
-            btn.addEventListener('mouseup', (e) => { e.preventDefault(); keys[key] = false; });
-            btn.addEventListener('mouseleave', (e) => { e.preventDefault(); keys[key] = false; });
+            });
+            // Also add mouse events for desktop testing or hybrid devices
+            btn.addEventListener('mousedown', () => keys[key] = true);
+            btn.addEventListener('mouseup', () => keys[key] = false);
+            btn.addEventListener('mouseleave', () => keys[key] = false); 
         }
 
         setupTouchControl(leftBtn, 'ArrowLeft');
         setupTouchControl(rightBtn, 'ArrowRight');
-        setupTouchControl(jumpBtn, ' ');
-
+        setupTouchControl(jumpBtn, ' '); 
+        
         // --- Game State Variables ---
         let player = {
             x: 50,
@@ -341,24 +285,24 @@
             scale: 1,
             canTakeDamage: true,
             damageCooldownTimeout: null,
-            invincible: false,
+            invincible: false, 
             invincibleTimer: 0,
-            speedBoost: false,
+            speedBoost: false, 
             speedBoostTimer: 0,
-            baseSpeed: 4,
-            baseJump: -9
+            baseSpeed: 4, 
+            baseJump: -9 
         };
-
+        
         let platforms = [];
         let enemies = [];
         let stars = [];
-        let powerUps = [];
-        let particles = [];
+        let powerUps = []; 
+        let particles = []; 
         let exitPlatform = null;
         let score = 0;
         let level = 1;
         let gameState = 'start';
-        let platformBaseSpeed = 0.7;
+        let platformBaseSpeed = 0.7; 
         let backgroundColors = [];
         let highScore = parseInt(localStorage.getItem('platformGameHighScore') || '0', 10);
         let gameOverFinalScore = 0;
@@ -368,7 +312,7 @@
         let transitionSpeed = 0.03;
         let transitionCallback = null;
         let playerCanMove = false;
-
+        
         // Global constant for special platform types
         const SPECIAL_PLATFORM_TYPES = ['disappearing', 'bouncy', 'conveyor'];
 
@@ -390,13 +334,13 @@
             update() {
                 this.x += this.vx;
                 this.y += this.vy;
-                this.vy += 0.1;
+                this.vy += 0.1; 
                 this.lifetime--;
                 this.alpha = this.lifetime / this.originalLifetime;
                 if (this.type === 'sparkle') {
-                    this.size *= 0.98;
+                    this.size *= 0.98; 
                 } else {
-                    this.size *= 0.95;
+                    this.size *= 0.95; 
                 }
             }
 
@@ -404,7 +348,11 @@
                 ctx.save();
                 ctx.globalAlpha = this.alpha;
                 ctx.fillStyle = this.color;
-                if (this.type === 'sparkle' || this.type === 'dust' || this.type === 'jump_puff') {
+                if (this.type === 'sparkle') {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (this.type === 'dust' || this.type === 'jump_puff') {
                     ctx.beginPath();
                     ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                     ctx.fill();
@@ -428,25 +376,49 @@
 
             switch (type) {
                 case 'sparkle':
-                    numParticles = 5 + Math.random() * 5; color = 'yellow'; minSize = 3; maxSize = 6;
-                    minVx = -2; maxVx = 2; minVy = -2; maxVy = 2; lifetime = 40; break;
+                    numParticles = 5 + Math.random() * 5;
+                    color = 'yellow';
+                    minSize = 3; maxSize = 6;
+                    minVx = -2; maxVx = 2;
+                    minVy = -2; maxVy = 2; 
+                    lifetime = 40;
+                    break;
                 case 'dust':
-                    numParticles = 3 + Math.random() * 3; color = 'grey'; minSize = 4; maxSize = 8;
-                    minVx = -1; maxVx = 1; minVy = -1; maxVy = -0.5; lifetime = 20; break;
+                    numParticles = 3 + Math.random() * 3;
+                    color = 'grey';
+                    minSize = 4; maxSize = 8;
+                    minVx = -1; maxVx = 1;
+                    minVy = -1; maxVy = -0.5;
+                    lifetime = 20;
+                    break;
                 case 'jump_puff':
-                    numParticles = 5 + Math.random() * 5; color = 'lightblue'; minSize = 5; maxSize = 10;
-                    minVx = -1; maxVx = 1; minVy = 1; maxVy = 3; lifetime = 25; break;
+                    numParticles = 5 + Math.random() * 5;
+                    color = 'lightblue';
+                    minSize = 5; maxSize = 10;
+                    minVx = -1; maxVx = 1;
+                    minVy = 1; maxVy = 3; 
+                    lifetime = 25;
+                    break;
                 case 'hit_splatter':
-                    numParticles = 8 + Math.random() * 7; color = 'red'; minSize = 4; maxSize = 10;
-                    minVx = -3; maxVx = 3; minVy = -4; maxVy = 0; lifetime = 30; break;
+                    numParticles = 8 + Math.random() * 7;
+                    color = 'red';
+                    minSize = 4; maxSize = 10;
+                    minVx = -3; maxVx = 3;
+                    minVy = -4; maxVy = 0;
+                    lifetime = 30;
+                    break;
             }
 
             for (let i = 0; i < numParticles; i++) {
                 particles.push(new Particle(
-                    x + (Math.random() - 0.5) * 5, y + (Math.random() - 0.5) * 5, type, color,
+                    x + (Math.random() - 0.5) * 5,
+                    y + (Math.random() - 0.5) * 5,
+                    type,
+                    color,
                     minSize + Math.random() * (maxSize - minSize),
                     minVx + Math.random() * (maxVx - minVx),
-                    minVy + Math.random() * (maxVy - minVy), lifetime
+                    minVy + Math.random() * (maxVy - minVy),
+                    lifetime
                 ));
             }
         }
@@ -456,64 +428,50 @@
             constructor(x, y, type) {
                 this.x = x;
                 this.y = y;
-                this.type = type;
+                this.type = type; 
                 this.radius = 12;
                 this.collected = false;
                 this.scale = 1;
                 this.color1 = '';
                 this.color2 = '';
-                this.animationTimer = 0;
+                this.symbol = ''; // Changed from emoji to text
+
+                this.animationTimer = 0; 
                 this.animationSpeed = 0.05;
 
                 switch (this.type) {
-                    case 'invincible': this.color1 = '#FFD700'; this.color2 = '#FFA500'; break;
-                    case 'speed': this.color1 = '#00FF00'; this.color2 = '#008000'; break;
+                    case 'invincible':
+                        this.color1 = '#FFD700'; 
+                        this.color2 = '#FFA500'; 
+                        this.symbol = 'I'; // Replaced '✨' with 'I'
+                        break;
+                    case 'speed':
+                        this.color1 = '#00FF00'; 
+                        this.color2 = '#008000'; 
+                        this.symbol = 'S'; // Replaced '⚡' with 'S'
+                        break;
                 }
             }
 
             draw(ctx) {
                 if (this.collected) return;
 
-                const offsetY = Math.sin(this.animationTimer) * 5;
+                const offsetY = Math.sin(this.animationTimer) * 5; 
                 drawCircleWithGradient(this.x, this.y + offsetY, this.radius, this.color1, this.color2, this.scale);
 
-                // Draw custom symbol instead of emoji
-                ctx.save();
-                ctx.translate(this.x, this.y + offsetY); // Center symbol on the power-up
                 ctx.fillStyle = 'white';
                 ctx.strokeStyle = 'black';
-                ctx.lineWidth = 1.5; // Adjusted for smaller symbols
-
-                if (this.type === 'invincible') { // Star symbol
-                    const R = this.radius * 0.5; // Symbol size relative to power-up radius
-                    const r = R * 0.4;
-                    ctx.beginPath();
-                    ctx.moveTo(0, -R);
-                    for (let i = 0; i < 5; i++) {
-                        ctx.lineTo(Math.cos((18 + i * 72) * Math.PI / 180) * r, -Math.sin((18 + i * 72) * Math.PI / 180) * r);
-                        ctx.lineTo(Math.cos((54 + i * 72) * Math.PI / 180) * R, -Math.sin((54 + i * 72) * Math.PI / 180) * R);
-                    }
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
-                } else if (this.type === 'speed') { // Arrow symbol
-                    const arrowSize = this.radius * 0.6;
-                    ctx.beginPath();
-                    // Arrow pointing right
-                    ctx.moveTo(-arrowSize * 0.5, -arrowSize * 0.35); // Back top
-                    ctx.lineTo(arrowSize * 0.1, -arrowSize * 0.35);  // Stem to arrowhead
-                    ctx.lineTo(arrowSize * 0.1, -arrowSize * 0.6);   // Arrowhead base top
-                    ctx.lineTo(arrowSize * 0.6, 0);                  // Tip
-                    ctx.lineTo(arrowSize * 0.1, arrowSize * 0.6);    // Arrowhead base bottom
-                    ctx.lineTo(arrowSize * 0.1, arrowSize * 0.35);   // Stem to arrowhead
-                    ctx.lineTo(-arrowSize * 0.5, arrowSize * 0.35);  // Back bottom
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
-                }
-                ctx.restore();
+                ctx.lineWidth = 2;
+                ctx.font = 'bold 20px Arial'; // Increased font size for clarity
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle'; // Center text vertically in the circle
+                ctx.strokeText(this.symbol, this.x, this.y + offsetY);
+                ctx.fillText(this.symbol, this.x, this.y + offsetY);
             }
-            update() { this.animationTimer += this.animationSpeed; }
+
+            update() {
+                this.animationTimer += this.animationSpeed;
+            }
         }
 
         // --- Drawing Helpers ---
@@ -529,9 +487,11 @@
             ctx.lineWidth = 2;
             ctx.stroke();
         }
-
+        
         function drawRectWithGradient(x, y, width, height, color1, color2) {
-            const gradient = ctx.createLinearGradient(x, y, x, y + height);
+            const centerX = x + width / 2;
+            const centerY = y + height / 2;
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, width / 2);
             gradient.addColorStop(0, color1);
             gradient.addColorStop(1, color2);
             ctx.fillStyle = gradient;
@@ -540,14 +500,17 @@
             ctx.lineWidth = 2;
             ctx.strokeRect(x, y, width, height);
         }
-
+        
         function drawTriangleWithGradient(x, y, size, color1, color2) {
             ctx.beginPath();
             ctx.moveTo(x, y - size);
             ctx.lineTo(x - size, y + size);
             ctx.lineTo(x + size, y + size);
             ctx.closePath();
-            const gradient = ctx.createRadialGradient(x, y, 0, x, y, size * 1.5);
+            
+            const centerX = x;
+            const centerY = y;
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size);
             gradient.addColorStop(0, color1);
             gradient.addColorStop(1, color2);
             ctx.fillStyle = gradient;
@@ -556,20 +519,29 @@
             ctx.lineWidth = 2;
             ctx.stroke();
         }
-
+        
         function drawStarWithGradient(x, y, radius, spikes, color1, color2, scale = 1) {
             let rot = Math.PI / 2 * 3;
+            let cx = x;
+            let cy = y;
             let step = Math.PI / spikes;
+            
             ctx.beginPath();
-            ctx.moveTo(x + Math.cos(rot) * radius * scale, y + Math.sin(rot) * radius * scale);
+            ctx.moveTo(cx + Math.cos(rot) * radius * scale, cy + Math.sin(rot) * radius * scale);
+            
             for (let i = 0; i < spikes; i++) {
                 rot += step;
-                ctx.lineTo(x + Math.cos(rot) * radius * scale * 0.4, y + Math.sin(rot) * radius * scale * 0.4);
+                let x = cx + Math.cos(rot) * radius * scale * 0.4;
+                let y = cy + Math.sin(rot) * radius * scale * 0.4;
+                ctx.lineTo(x, y);
                 rot += step;
-                ctx.lineTo(x + Math.cos(rot) * radius * scale, y + Math.sin(rot) * radius * scale);
+                x = cx + Math.cos(rot) * radius * scale;
+                y = cy + Math.sin(rot) * radius * scale;
+                ctx.lineTo(x, y);
             }
             ctx.closePath();
-            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * scale);
+            
+            const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * scale);
             gradient.addColorStop(0, color1);
             gradient.addColorStop(1, color2);
             ctx.fillStyle = gradient;
@@ -578,398 +550,487 @@
             ctx.lineWidth = 2;
             ctx.stroke();
         }
-
-        function drawHeart(ctx, centerX, centerY, size, color = '#FF69B4') { // Pinkish heart
-            ctx.save();
-            ctx.fillStyle = color;
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = Math.max(1, size / 12); // Thinner stroke for small hearts
-            ctx.beginPath();
-            const topCurveHeight = size * 0.3;
-            const bottomPartHeight = size * 0.7;
-            const halfWidth = size / 2;
-
-            // Adjust startY for the centerY anchor
-            const startY = centerY - size / 2 + topCurveHeight;
-            ctx.moveTo(centerX, startY);
-
-            // Top left curve
-            ctx.bezierCurveTo(centerX, centerY - size / 2,
-                              centerX - halfWidth, centerY - size / 2,
-                              centerX - halfWidth, startY);
-            // Bottom left curve
-            ctx.bezierCurveTo(centerX - halfWidth, centerY - size / 2 + (topCurveHeight + bottomPartHeight / 1.5),
-                              centerX, centerY - size / 2 + (topCurveHeight + bottomPartHeight / 1.2),
-                              centerX, centerY + size / 2);
-            // Bottom right curve
-            ctx.bezierCurveTo(centerX, centerY - size / 2 + (topCurveHeight + bottomPartHeight / 1.2),
-                              centerX + halfWidth, centerY - size / 2 + (topCurveHeight + bottomPartHeight / 1.5),
-                              centerX + halfWidth, startY);
-            // Top right curve
-            ctx.bezierCurveTo(centerX + halfWidth, centerY - size / 2,
-                              centerX, centerY - size / 2,
-                              centerX, startY);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
-        }
-
-
+        
         function generateBackgroundColors() {
-            backgroundColors = []; // Clear previous
+            backgroundColors = [];
             switch (level % 5) {
-                case 1: backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c']; break;
-                case 2: backgroundColors = ['#f9d423', '#ff4e50', '#fc913a']; break;
-                case 3: backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6']; break;
-                case 4: backgroundColors = ['#ff9966', '#ff5e62', '#c84e89']; break;
-                case 0: backgroundColors = ['#141e30', '#243b55', '#1a2a3a']; break;
-                default: backgroundColors = ['#222222', '#333333', '#444444']; break; // Fallback
+                case 1: 
+                    backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c'];
+                    break;
+                case 2: 
+                    backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];
+                    break;
+                case 3: 
+                    backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6'];
+                    break;
+                case 4: 
+                    backgroundColors = ['#ff9966', '#ff5e62', '#c84e89'];
+                    break;
+                case 0: 
+                    backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
+                    break;
             }
         }
-
+        
         function initLevel() {
-            platforms = []; enemies = []; stars = []; powerUps = []; particles = [];
+            platforms = [];
+            enemies = [];
+            stars = [];
+            powerUps = [];
+            particles = []; 
             exitPlatform = null;
             generateBackgroundColors();
-
+            
+            // Green starting platform
             platforms.push({
-                x: 20, y: canvas.height * 0.15, // Start platform higher
-                width: Math.min(100, canvas.width * 0.2), height: 20,
-                color1: '#006400', color2: '#004d00', static: true, type: 'normal', active: true
+                x: 20,
+                y: GAME_RESOLUTION_HEIGHT * 0.18, // Adjusted to fixed game resolution
+                width: 100,
+                height: 20,
+                color1: '#006400', 
+                color2: '#004d00', 
+                static: true,
+                type: 'normal',
+                active: true
             });
-
+            
             const numDynamicPlatforms = 8 + Math.floor(Math.random() * 4) + Math.min(level, 5);
-            const minY = canvas.height * 0.20; // Adjusted to give more space from top
-            const maxY = canvas.height * 0.9;
-            const verticalGap = (maxY - minY) / (numDynamicPlatforms + 1); // +1 for even spacing
+            const maxY = GAME_RESOLUTION_HEIGHT * 0.9;
+            const minY = GAME_RESOLUTION_HEIGHT * 0.25;
+            const verticalGap = (maxY - minY) / (numDynamicPlatforms + 1);
 
             let dynamicPlatformConfigs = [];
+
             let specialPlatformsToGenerate = [];
-            if (level === 1) { /* No special platforms */ }
-            else if (level >= 2 && level <= 4) { specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[level - 2]); }
-            else if (level >= 5) {
+
+            if (level === 1) {
+                // No special platforms in Level 1
+            } else if (level >= 2 && level <= 4) {
+                const typeToIntroduce = SPECIAL_PLATFORM_TYPES[level - 2];
+                specialPlatformsToGenerate.push(typeToIntroduce);
+            } else if (level >= 5) {
                 specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
-                if (Math.random() < 0.5) specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
+                specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
             }
 
             for (let i = 0; i < numDynamicPlatforms; i++) {
-                let currentType = 'normal';
-                let pColor1 = '#00008B'; let pColor2 = '#000066';
+                let currentType = 'normal'; 
+                let pColor1 = '#00008B'; 
+                let pColor2 = '#000066';
                 let platformSpeedFactor = (1.0 + Math.random() * 0.5);
                 let isStatic = false;
                 let direction = Math.random() > 0.5 ? 1 : -1;
 
-                if (specialPlatformsToGenerate.length > 0 && Math.random() < (0.25 + level * 0.02) ) { // Chance to pick special
-                    currentType = specialPlatformsToGenerate.shift();
-                }
-                // Assign properties based on type AFTER potentially picking a special type
-                switch (currentType) {
-                    case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
-                    case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
-                    case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; platformSpeedFactor = (1.0 + Math.random()); break;
+                if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.3) { 
+                    currentType = specialPlatformsToGenerate.shift(); 
+                    switch (currentType) {
+                        case 'disappearing':
+                            pColor1 = '#800080'; 
+                            pColor2 = '#4B0082';
+                            isStatic = false; 
+                            break;
+                        case 'bouncy':
+                            pColor1 = '#32CD32'; 
+                            pColor2 = '#228B22';
+                            isStatic = true; 
+                            platformSpeedFactor = 0; 
+                            break;
+                        case 'conveyor':
+                            pColor1 = '#A9A9A9'; 
+                            pColor2 = '#696969';
+                            isStatic = false;
+                            platformSpeedFactor = (1.0 + Math.random() * 0.5); 
+                            break;
+                    }
                 }
 
-                const pWidth = Math.max(60, canvas.width * (0.15 + Math.random() * 0.25)); // Relative width
-                const pY = minY + (i + 1) * verticalGap;
-                const pX = Math.random() * (canvas.width - pWidth);
+                const width = 70 + Math.random() * 150;
+                const y = minY + (i + 1) * verticalGap; 
+                const x = Math.random() * (GAME_RESOLUTION_WIDTH - width); // Use GAME_RESOLUTION_WIDTH
 
                 dynamicPlatformConfigs.push({
-                    x: pX, y: pY, width: pWidth, height: 15, color1: pColor1, color2: pColor2,
+                    x, y, width, height: 15, color1: pColor1, color2: pColor2,
                     static: isStatic, direction, speed: platformBaseSpeed * platformSpeedFactor,
                     type: currentType, originalColor1: pColor1, originalColor2: pColor2,
-                    active: true, timer: 0, reappearTime: 120
+                    active: true, timer: 0, reappearTime: 120 
                 });
             }
-             // Ensure any remaining special platforms are added
+
             while(specialPlatformsToGenerate.length > 0) {
                 const currentType = specialPlatformsToGenerate.shift();
                 let pColor1 = '#00008B'; let pColor2 = '#000066';
                 let platformSpeedFactor = (1.0 + Math.random() * 0.5); let isStatic = false;
+                
                 switch (currentType) {
                     case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
                     case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
                     case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; break;
                 }
-                const pWidth = Math.max(60, canvas.width * (0.15 + Math.random() * 0.25));
-                const pY = minY + Math.random() * (maxY - minY);
-                const pX = Math.random() * (canvas.width - pWidth);
+
+                const width = 70 + Math.random() * 150;
+                const y = minY + Math.random() * (maxY - minY); 
+                const x = Math.random() * (GAME_RESOLUTION_WIDTH - width); // Use GAME_RESOLUTION_WIDTH
+
                 dynamicPlatformConfigs.push({
-                    x: pX, y: pY, width: pWidth, height: 15, color1: pColor1, color2: pColor2,
+                    x, y, width, height: 15, color1: pColor1, color2: pColor2,
                     static: isStatic, direction: Math.random() > 0.5 ? 1 : -1,
                     speed: platformBaseSpeed * platformSpeedFactor, type: currentType,
                     originalColor1: pColor1, originalColor2: pColor2, active: true, timer: 0, reappearTime: 120
                 });
             }
 
-
             dynamicPlatformConfigs.sort((a, b) => a.y - b.y);
-            platforms.push(...dynamicPlatformConfigs);
+            dynamicPlatformConfigs.forEach(config => platforms.push(config));
 
-            platforms.push({ // Deadly bottom platform
-                x: 0, y: canvas.height - 20, width: canvas.width, height: 20,
-                color1: '#8B0000', color2: '#660000', static: true, deadly: true, type: 'normal', active: true
+            platforms.push({
+                x: 0, y: GAME_RESOLUTION_HEIGHT - 20, width: GAME_RESOLUTION_WIDTH, height: 20, // Use GAME_RESOLUTION_WIDTH
+                color1: '#8B0000', color2: '#660000', static: true, deadly: true, type: 'normal'
             });
-
-            for (let i = 1; i < platforms.length - 1; i++) { // Skip start and deadly bottom
+            
+            for (let i = 1; i < platforms.length - 1; i++) {
                 const platform = platforms[i];
-                if (Math.random() < (0.3 + (level * 0.05)) && platform.type !== 'bouncy' && platform.width > 80) {
+                if (Math.random() < (0.3 + (level * 0.05)) && platform.type !== 'bouncy') {
                     enemies.push({
                         x: platform.x + platform.width / 2, y: platform.y - 15, size: 12,
                         platformIndex: i, direction: Math.random() > 0.5 ? 1 : -1,
-                        speed: platformBaseSpeed * (0.3 + Math.random() * 0.4) // Slower enemies
+                        speed: platformBaseSpeed * (0.5 + Math.random() * 0.5) * 0.5
                     });
                 }
-                if (Math.random() < 0.08 && platform.type !== 'bouncy' && platform.type !== 'disappearing' && platform.width > 100) {
+                if (Math.random() < 0.08 && platform.type !== 'bouncy' && platform.type !== 'disappearing') {
                     const puType = Math.random() < 0.5 ? 'invincible' : 'speed';
                     powerUps.push(new PowerUp(platform.x + platform.width / 2, platform.y - 20, puType));
                 }
             }
-
+            
             const numStars = 5 + level;
-            const maxStarY = canvas.height * 0.85; // Adjusted for platform range
-            const starRadius = Math.min(15, canvas.width * 0.03); // Relative star size
-
+            const maxStarY = GAME_RESOLUTION_HEIGHT * 4/5; // Use GAME_RESOLUTION_HEIGHT
+            
             for (let i = 0; i < numStars; i++) {
-                let valid = false; let starX, starY; let attempts = 0;
-                while (!valid && attempts < 50) {
-                    attempts++;
-                    starX = starRadius + Math.random() * (canvas.width - starRadius * 2);
-                    starY = platforms[0].y + starRadius * 2 + Math.random() * (maxStarY - platforms[0].y - starRadius * 2); // Stars appear above first platform mostly
+                let valid = false;
+                let starX, starY;
+                while (!valid) {
+                    starX = 20 + Math.random() * (GAME_RESOLUTION_WIDTH - 40); // Use GAME_RESOLUTION_WIDTH
+                    starY = 30 + Math.random() * (maxStarY);
                     valid = true;
-                    // Check collisions (simplified)
-                    if (stars.some(s => Math.hypot(s.x - starX, s.y - starY) < starRadius * 3)) valid = false;
-                    if (platforms.some(p => starX > p.x - starRadius && starX < p.x + p.width + starRadius && starY > p.y - starRadius && starY < p.y + p.height + starRadius)) valid = false;
-                    if (enemies.some(e => Math.hypot(e.x - starX, e.y - starY) < e.size + starRadius + 10)) valid = false;
+                    for (const enemy of enemies) {
+                        const dx = starX - enemy.x; const dy = starY - enemy.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < 30) { valid = false; break; }
+                    }
+                    if (!valid) continue;
+                    for (const platform of platforms) {
+                        if (starX + 10 > platform.x && starX - 10 < platform.x + platform.width &&
+                            starY + 10 > platform.y && starY - 10 < platform.y + platform.height) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    if (!valid) continue;
+                    for (const pu of powerUps) {
+                        const dx = starX - pu.x; const dy = starY - pu.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < 40) { valid = false; break; }
+                    }
                 }
-                if(valid) stars.push({ x: starX, y: starY, radius: starRadius, scale: 1, collected: false });
+                stars.push({ x: starX, y: starY, radius: 15, scale: 1, collected: false });
             }
-             if (stars.length < numStars / 2 && numStars > 3) { // If too few stars placed, retry simplified
-                for (let i = stars.length; i < numStars; i++) {
-                     stars.push({ x: Math.random() * canvas.width, y: canvas.height*0.3 + Math.random() * canvas.height*0.4, radius: starRadius, scale: 1, collected: false });
-                }
-            }
-
-
-            player.x = platforms[0].x + platforms[0].width / 2;
-            player.y = platforms[0].y - player.radius -1;
-            player.vx = 0; player.vy = 0; player.scale = 1; player.onGround = true;
-            player.canTakeDamage = true; clearTimeout(player.damageCooldownTimeout);
-            player.invincible = false; player.invincibleTimer = 0;
-            player.speedBoost = false; player.speedBoostTimer = 0;
+            
+            // Reset player position
+            player.x = 50;
+            player.y = platforms[0].y - player.radius;
+            player.vx = 0;
+            player.vy = 0;
+            player.scale = 1;
+            player.onGround = true;
+            player.canTakeDamage = true;
+            clearTimeout(player.damageCooldownTimeout);
+            player.invincible = false;
+            player.invincibleTimer = 0;
+            player.speedBoost = false;
+            player.speedBoostTimer = 0;
         }
-
+        
         function update() {
             switch (gameState) {
                 case 'start':
-                    if (keys[' ']) { playerCanMove = true; gameState = 'playing'; keys[' '] = false; startMusic(); }
+                    if (keys[' ']) {
+                        playerCanMove = true;
+                        gameState = 'playing';
+                        keys[' '] = false;
+                        startMusic();
+                    }
                     break;
                 case 'playing':
                     if (keys['p'] || keys['Escape']) {
-                        gameState = 'paused'; keys['p'] = false; keys['Escape'] = false;
-                        if (bgMusic) bgMusic.pause(); playerCanMove = false;
+                        gameState = 'paused';
+                        keys['p'] = false; keys['Escape'] = false;
+                        if (bgMusic) bgMusic.pause();
+                        playerCanMove = false;
                     }
-                    updatePlayer(); updatePlatforms(); updateEnemies(); updateStars(); updatePowerUps(); updateParticles(); checkExitPlatform();
+                    updatePlayer();
+                    updatePlatforms();
+                    updateEnemies();
+                    updateStars();
+                    updatePowerUps(); 
+                    updateParticles(); 
+                    checkExitPlatform();
                     break;
                 case 'paused':
                     if (keys['p'] || keys['Escape']) {
-                        gameState = 'playing'; keys['p'] = false; keys['Escape'] = false;
-                        if (bgMusic) startMusic(); playerCanMove = true;
+                        gameState = 'playing';
+                        keys['p'] = false; keys['Escape'] = false;
+                        if (bgMusic) startMusic();
+                        playerCanMove = true;
                     }
                     break;
                 case 'transitioning':
                     transitionAlpha += transitionSpeed;
                     if (transitionAlpha >= 1) {
-                        transitionAlpha = 1; if (transitionCallback) transitionCallback(); transitionSpeed *= -1;
-                    } else if (transitionAlpha <= 0 && transitionSpeed < 0) { // Ensure it only reverses once
-                        transitionAlpha = 0; transitionSpeed = Math.abs(transitionSpeed); gameState = 'playing'; playerCanMove = true;
+                        transitionAlpha = 1;
+                        if (transitionCallback) transitionCallback();
+                        transitionSpeed *= -1;
+                    } else if (transitionAlpha <= 0) {
+                        transitionAlpha = 0;
+                        transitionSpeed = Math.abs(transitionSpeed);
+                        gameState = 'playing';
+                        playerCanMove = true;
                     }
                     break;
                 case 'gameOver':
-                    if (keys[' ']) { resetGame(); keys[' '] = false; }
+                    if (keys[' ']) {
+                        resetGame();
+                        keys[' '] = false;
+                    }
                     break;
             }
         }
-
+        
         function updatePlayer() {
-            if (!playerCanMove) { player.vx = 0; return; }
+            if (!playerCanMove) {
+                player.vx = 0;
+                return;
+            }
 
             let currentSpeed = player.baseSpeed;
             if (player.speedBoost) {
-                currentSpeed *= 1.8; // Adjusted boost
+                currentSpeed *= 2.0; 
                 player.speedBoostTimer--;
-                if (player.speedBoostTimer <= 0) player.speedBoost = false;
+                if (player.speedBoostTimer <= 0) {
+                    player.speedBoost = false;
+                }
             }
 
-            if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.3, -currentSpeed); // Quicker acc
-            else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.3, currentSpeed);
-            else player.vx *= 0.85; // Slightly less friction
-
+            if (keys.ArrowLeft) player.vx = Math.max(player.vx - 0.2, -currentSpeed);
+            else if (keys.ArrowRight) player.vx = Math.min(player.vx + 0.2, currentSpeed);
+            else player.vx *= 0.9;
+            
             player.x += player.vx;
-
+            
             if (keys[' '] && player.onGround) {
-                player.vy = player.baseJump; player.onGround = false; playJumpSound();
+                player.vy = player.baseJump;
+                player.onGround = false;
+                playJumpSound();
             }
-
-            player.vy += 0.35; // Slightly stronger gravity
+            
+            player.vy += 0.3;
             player.y += player.vy;
-
-            if (player.x - player.radius < 0) { player.x = player.radius; player.vx = 0; }
-            if (player.x + player.radius > canvas.width) { player.x = canvas.width - player.radius; player.vx = 0; }
-
+            
+            if (player.x < player.radius) {
+                player.x = player.radius;
+                player.vx = 0;
+            }
+            if (player.x > GAME_RESOLUTION_WIDTH - player.radius) { // Use GAME_RESOLUTION_WIDTH
+                player.x = GAME_RESOLUTION_WIDTH - player.radius;
+                player.vx = 0;
+            }
+            
             let landedOnPlatformThisFrame = false;
             for (const platform of platforms) {
-                if (!platform.active) continue;
-                if (player.vy >= 0 && // Moving downwards or still
-                    player.y + player.radius > platform.y &&
-                    player.y + player.radius < platform.y + platform.height + Math.abs(player.vy) && // Check within next frame
-                    player.x + player.radius * 0.8 > platform.x && // Slightly narrower collision for x
-                    player.x - player.radius * 0.8 < platform.x + platform.width) {
+                if (!platform.active) continue; 
 
-                    if (player.y - player.vy + player.radius <= platform.y + 1) { // Was above or at platform level in previous frame
+                if (player.vy > 0 && 
+                    player.y + player.radius > platform.y && 
+                    player.y - player.radius < platform.y + platform.height &&
+                    player.x + player.radius > platform.x && 
+                    player.x - player.radius < platform.x + platform.width) {
+                    
+                    if (player.y - player.vy + player.radius <= platform.y) { 
                         player.y = platform.y - player.radius;
-                        if (!player.onGround) { // First land
-                            if (platform.type === 'bouncy') { player.vy = player.baseJump * 1.8; }
-                            else { player.vy = -player.vy * 0.1; } // Slight bounce
-                            playLandSound();
-                        } else { player.vy = 0; } // Already on ground, ensure vy is 0
-
+                        
+                        if (!player.onGround) {
+                             if (platform.type === 'bouncy') {
+                                player.vy = player.baseJump * 1.8; 
+                             } else {
+                                player.vy = -player.vy * 0.2; 
+                             }
+                             playLandSound();
+                        } else {
+                            player.vy = 0;
+                        }
                         player.onGround = true;
                         landedOnPlatformThisFrame = true;
-
-                        if (player.scale === 1) { player.scale = 0.9; setTimeout(() => player.scale = 1, 100); }
-                        if (!platform.static) { player.x += platform.direction * platform.speed; }
-                        if (platform.type === 'conveyor') { player.x += platform.direction * platform.speed * 1.5; }
-                        if (platform.type === 'disappearing' && platform.timer === 0) { // Only trigger if not already disappearing
-                            platform.timer = 60; platform.color1 = 'rgba(128,0,128,0.5)'; platform.color2 = 'rgba(75,0,130,0.5)';
+                        
+                        if (player.scale === 1) {
+                            player.scale = 0.9;
+                            setTimeout(() => player.scale = 1, 100);
                         }
-                        if (platform.deadly && !player.invincible && player.canTakeDamage) { playerDie(true); }
+                        
+                        if (!platform.static) {
+                            player.x += platform.direction * platform.speed;
+                        }
+                        if (platform.type === 'conveyor') {
+                             player.x += platform.direction * platform.speed * 1.5; 
+                        }
+
+                        if (platform.type === 'disappearing') {
+                            platform.timer = 60; 
+                            platform.color1 = 'rgba(128,0,128,0.5)'; 
+                            platform.color2 = 'rgba(75,0,130,0.5)';
+                        }
+                        
+                        if (platform.deadly && !player.invincible && player.canTakeDamage) {
+                            playerDie(true);
+                        }
                     }
                 }
             }
-            if (!landedOnPlatformThisFrame && player.onGround && player.vy > 0.1) { // If moving down and no platform found
-                player.onGround = false;
+            if (!landedOnPlatformThisFrame && player.onGround && player.vy > 0) {
+                 player.onGround = false;
             }
-
 
             for (const enemy of enemies) {
-                const dx = player.x - enemy.x; const dy = player.y - enemy.y;
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
+                
                 if (distance < player.radius + enemy.size * 0.7 && !player.invincible && player.canTakeDamage) {
-                    playEnemyHitSound(); // Moved sound here
                     playerDie(false);
-                    player.vx = dx > 0 ? 6 : -6; // Stronger knockback
-                    player.vy = -4;
+                    player.vx = dx > 0 ? 5 : -5;
+                    player.vy = -3;
                 }
             }
-
-            if (player.y > canvas.height + player.radius * 2) { // Fall off screen
-                if (!player.invincible && player.canTakeDamage) { playerDie(true); }
+            
+            if (player.y > GAME_RESOLUTION_HEIGHT + 50) { // Use GAME_RESOLUTION_HEIGHT
+                if (!player.invincible && player.canTakeDamage) {
+                    playerDie(true);
+                }
             }
 
             if (player.invincibleTimer > 0) {
                 player.invincibleTimer--;
                 if (player.invincibleTimer <= 0) {
-                    player.invincible = false; player.canTakeDamage = true; clearTimeout(player.damageCooldownTimeout);
+                    player.invincible = false;
+                    player.canTakeDamage = true; 
+                    clearTimeout(player.damageCooldownTimeout); 
                 }
             }
         }
-
+        
         function updatePlatforms() {
-            for (const platform of platforms) {
+            for (let i = 0; i < platforms.length; i++) {
+                const platform = platforms[i];
                 if (!platform.static) {
                     platform.x += platform.direction * platform.speed;
-                    if (platform.x <= 0 || platform.x + platform.width >= canvas.width) {
+                    
+                    if (platform.x <= 0 || platform.x + platform.width >= GAME_RESOLUTION_WIDTH) { // Use GAME_RESOLUTION_WIDTH
                         platform.direction *= -1;
-                        platform.x = Math.max(0, Math.min(platform.x, canvas.width - platform.width)); // Clamp
+                        if (platform.x < 0) platform.x = 0;
+                        if (platform.x + platform.width > GAME_RESOLUTION_WIDTH) platform.x = GAME_RESOLUTION_WIDTH - platform.width; // Use GAME_RESOLUTION_WIDTH
                     }
                 }
                 if (platform.type === 'disappearing' && platform.timer > 0) {
                     platform.timer--;
                     if (platform.timer <= 0) {
                         platform.active = false;
-                        // Use a new property for reappearance to avoid setTimeout complexities with game state
-                        platform.reappearCountdown = platform.reappearTime * 10;
-                    }
-                }
-                if (platform.type === 'disappearing' && !platform.active && platform.reappearCountdown > 0) {
-                    platform.reappearCountdown--;
-                    if (platform.reappearCountdown <= 0) {
-                        platform.active = true;
-                        platform.color1 = platform.originalColor1;
-                        platform.color2 = platform.originalColor2;
+                        setTimeout(() => {
+                            platform.active = true;
+                            platform.color1 = platform.originalColor1;
+                            platform.color2 = platform.originalColor2;
+                        }, platform.reappearTime * 10); 
                     }
                 }
             }
         }
-
+        
         function updateEnemies() {
             for (const enemy of enemies) {
                 const platform = platforms[enemy.platformIndex];
-                if (!platform || !platform.active) { // Enemy disappears if platform is gone
-                    // Optionally, make them fall or handle differently
-                    continue;
-                }
-
+                
                 enemy.x += enemy.direction * enemy.speed;
-                const patrolMargin = 5; // Smaller margin
+
+                const patrolMargin = 10;
                 if (enemy.x - enemy.size < platform.x + patrolMargin || enemy.x + enemy.size > platform.x + platform.width - patrolMargin) {
                     enemy.direction *= -1;
-                    enemy.x = Math.max(platform.x + patrolMargin + enemy.size, Math.min(enemy.x, platform.x + platform.width - patrolMargin - enemy.size));
+                    if (enemy.x - enemy.size < platform.x + patrolMargin) enemy.x = platform.x + patrolMargin + enemy.size;
+                    if (enemy.x + enemy.size > platform.x + platform.width - patrolMargin) enemy.x = platform.x + platform.width - patrolMargin - enemy.size;
                 }
+                
                 enemy.y = platform.y - enemy.size - 2;
             }
         }
-
+        
         function updateStars() {
             let allCollected = true;
-            for (let i = stars.length - 1; i >= 0; i--) {
+            for (let i = 0; i < stars.length; i++) {
                 const star = stars[i];
                 if (!star.collected) {
                     allCollected = false;
-                    const dx = player.x - star.x; const dy = player.y - star.y;
+                    const dx = player.x - star.x;
+                    const dy = player.y - star.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < player.radius + star.radius * star.scale * 0.8) { // Generous collection
-                        star.collected = true; score += 1; playStarSound();
-                        // Simple shrink animation
-                        let shrinkInterval = setInterval(() => {
-                            if(!star) { clearInterval(shrinkInterval); return; } // Star might be removed if level resets
-                            star.scale -= 0.1;
-                            if (star.scale <= 0.1) {
-                                clearInterval(shrinkInterval);
-                                // Optionally remove from array here, or just rely on !star.collected check
+                    if (distance < player.radius + star.radius * star.scale * 0.7) {
+                        star.collected = true;
+                        score += 1;
+                        playStarSound();
+                        (function animateStar(starIndex, scaleValue) {
+                            if (!stars[starIndex] || stars[starIndex].collected !== true) return;
+                            stars[starIndex].scale = scaleValue;
+                            if (scaleValue > 0.1) {
+                                requestAnimationFrame(() => animateStar(starIndex, scaleValue - 0.1));
                             }
-                        }, 20);
+                        })(i, 1);
                     }
                 }
             }
-            if (allCollected && stars.length > 0 && !exitPlatform && gameState === 'playing') { // Check gameState
+            if (allCollected && !exitPlatform) {
                 exitPlatform = {
-                    x: canvas.width - Math.min(120, canvas.width * 0.25), // Relative X
-                    y: platforms[0].y, // Align with start platform Y for consistency
-                    width: Math.min(100, canvas.width * 0.2), height: 20,
-                    color1: '#00CD00', color2: '#008B00', // Brighter green
-                    static: true, type: 'normal'
+                    x: GAME_RESOLUTION_WIDTH - 120, // Use GAME_RESOLUTION_WIDTH
+                    y: GAME_RESOLUTION_HEIGHT - 80, // Use GAME_RESOLUTION_HEIGHT
+                    width: 100,
+                    height: 20,
+                    color1: '#006400',
+                    color2: '#004d00',
+                    static: true,
+                    type: 'normal'
                 };
             }
         }
 
-
         function updatePowerUps() {
             for (let i = powerUps.length - 1; i >= 0; i--) {
                 const powerUp = powerUps[i];
-                powerUp.update();
+                powerUp.update(); 
+
                 if (powerUp.collected) continue;
-                const dx = player.x - powerUp.x; const dy = player.y - powerUp.y;
+
+                const dx = player.x - powerUp.x;
+                const dy = player.y - powerUp.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
+
                 if (distance < player.radius + powerUp.radius) {
-                    powerUp.collected = true; playPowerUpSound(); score += 2;
+                    powerUp.collected = true;
+                    playPowerUpSound();
+                    score += 2; 
+
                     switch (powerUp.type) {
                         case 'invincible':
-                            player.invincible = true; player.invincibleTimer = 360; // Longer duration
-                            player.canTakeDamage = false; clearTimeout(player.damageCooldownTimeout); break;
+                            player.invincible = true;
+                            player.invincibleTimer = 300; 
+                            player.canTakeDamage = false; 
+                            clearTimeout(player.damageCooldownTimeout); 
+                            break;
                         case 'speed':
-                            player.speedBoost = true; player.speedBoostTimer = 360; break; // Longer duration
+                            player.speedBoost = true;
+                            player.speedBoostTimer = 300; 
+                            break;
                     }
                     powerUps.splice(i, 1);
                 }
@@ -978,219 +1039,288 @@
 
         function updateParticles() {
             for (let i = particles.length - 1; i >= 0; i--) {
-                particles[i].update();
-                if (particles[i].lifetime <= 0 || particles[i].size <= 0.5) particles.splice(i, 1);
-            }
-        }
-
-        function playerDie(isFallOrDeadlyPlatform) {
-            if (!player.canTakeDamage && !isFallOrDeadlyPlatform) return; // Allow death from fall even if recently hit
-
-            player.lives--;
-            player.canTakeDamage = false; clearTimeout(player.damageCooldownTimeout);
-            player.invincible = false; player.invincibleTimer = 0; // Cancel active invincibility on death
-
-            player.damageCooldownTimeout = setTimeout(() => { player.canTakeDamage = true; }, 1500); // Longer cooldown
-
-            if (player.lives <= 0) {
-                gameOverFinalScore = score;
-                if (gameOverFinalScore > highScore) { highScore = gameOverFinalScore; localStorage.setItem('platformGameHighScore', highScore); }
-                playerCanMove = false; gameState = 'transitioning';
-                transitionCallback = () => { gameState = 'gameOver'; playGameOverSound(); };
-            } else {
-                if (isFallOrDeadlyPlatform) playLifeLostSound();
-                // No sound for regular enemy hit was here, moved to enemy collision check
-                playerCanMove = false; gameState = 'transitioning';
-                transitionCallback = () => {
-                    player.x = platforms[0].x + platforms[0].width / 2;
-                    player.y = platforms[0].y - player.radius -1;
-                    player.vx = 0; player.vy = 0; player.scale = 1; player.onGround = true;
-                };
-            }
-        }
-
-        function checkExitPlatform() {
-            if (exitPlatform && gameState === 'playing') { // Check gameState
-                if (player.y + player.radius > exitPlatform.y &&
-                    player.y - player.radius < exitPlatform.y + exitPlatform.height &&
-                    player.x + player.radius > exitPlatform.x &&
-                    player.x - player.radius < exitPlatform.x + exitPlatform.width) {
-                    score += 5; playLevelCompleteSound();
-                    playerCanMove = false; gameState = 'transitioning';
-                    transitionCallback = () => {
-                        level++; platformBaseSpeed = Math.min(1.5, platformBaseSpeed + 0.05); // Cap speed
-                        initLevel();
-                        // Transition back to playing will be handled by the transition logic itself
-                    };
+                const particle = particles[i];
+                particle.update();
+                if (particle.lifetime <= 0 || particle.size <= 0.5) {
+                    particles.splice(i, 1);
                 }
             }
         }
+        
+        function playerDie(isFallOrDeadlyPlatform) {
+            if (!player.canTakeDamage) return;
+            
+            player.lives--;
+            player.canTakeDamage = false;
+            clearTimeout(player.damageCooldownTimeout); 
+            player.invincible = false; 
+            player.invincibleTimer = 0;
+            
+            player.damageCooldownTimeout = setTimeout(() => {
+                player.canTakeDamage = true;
+            }, 1000); 
+            
+            if (player.lives <= 0) {
+                gameOverFinalScore = score;
+                if (gameOverFinalScore > highScore) {
+                    highScore = gameOverFinalScore;
+                    localStorage.setItem('platformGameHighScore', highScore);
+                }
+                
+                playerCanMove = false;
+                gameState = 'transitioning';
+                transitionCallback = () => {
+                    gameState = 'gameOver';
+                    playGameOverSound();
+                };
 
-        function drawBackground() {
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            if (backgroundColors.length > 0) {
-                backgroundColors.forEach((color, index) => {
-                    gradient.addColorStop(Math.max(0, Math.min(1, index / (backgroundColors.length -1))), color);
-                });
-            } else { // Fallback if colors not generated
-                gradient.addColorStop(0, '#222'); gradient.addColorStop(1, '#000');
+            } else {
+                if (isFallOrDeadlyPlatform) {
+                    playLifeLostSound();
+                } 
+                
+                playerCanMove = false;
+                gameState = 'transitioning';
+                transitionCallback = () => {
+                    player.x = 50;
+                    player.y = platforms[0].y - player.radius; 
+                    player.vx = 0;
+                    player.vy = 0; 
+                    player.scale = 1;
+                    player.onGround = true; 
+                };
             }
+        }
+        
+        function checkExitPlatform() {
+            if (exitPlatform) {
+                if (player.y + player.radius > exitPlatform.y && 
+                    player.y - player.radius < exitPlatform.y + exitPlatform.height &&
+                    player.x + player.radius > exitPlatform.x && 
+                    player.x - player.radius < exitPlatform.x + exitPlatform.width) {
+                    
+                    if (gameState === 'playing') {
+                        score += 5;
+                        playLevelCompleteSound();
+                        
+                        playerCanMove = false;
+                        gameState = 'transitioning';
+                        transitionCallback = () => {
+                            level++;
+                            platformBaseSpeed += 0.05;
+                            initLevel();
+                        };
+                    }
+                }
+            }
+        }
+        
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, GAME_RESOLUTION_HEIGHT); // Use GAME_RESOLUTION_HEIGHT
+            backgroundColors.forEach((color, index) => {
+                gradient.addColorStop(index / (backgroundColors.length - 1), color);
+            });
             ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, GAME_RESOLUTION_WIDTH, GAME_RESOLUTION_HEIGHT); // Use GAME_RESOLUTION_WIDTH/HEIGHT
         }
 
         function drawGameElements() {
             drawBackground();
-            for (const platform of platforms) { if (platform.active) drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2); }
+            
+            for (const platform of platforms) {
+                if (platform.active) {
+                    drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
+                }
+            }
+            
             if (exitPlatform) {
                 drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
-                ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
-                const fontSizeExit = Math.min(18, exitPlatform.height * 0.7); // Relative font size
-                ctx.font = `bold ${fontSizeExit}px Arial`;
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                
+                ctx.fillStyle = 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle'; // For text centering
                 ctx.strokeText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2);
                 ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2);
             }
-
-            for (const star of stars) { if (!star.collected && star.scale > 0.1) drawStarWithGradient(star.x, star.y, star.radius, 5, '#FFFF00', '#FFD700', star.scale); }
-            for (const powerUp of powerUps) { powerUp.draw(ctx); }
-            for (const enemy of enemies) {
-                 const platform = platforms[enemy.platformIndex]; // Check if platform exists
-                 if (platform && platform.active) { // Only draw if on an active platform
-                    drawTriangleWithGradient(enemy.x, enemy.y, enemy.size, '#FF0000', '#8B0000');
-                 }
+            
+            for (const star of stars) {
+                if (!star.collected) {
+                    drawStarWithGradient(star.x, star.y, star.radius, 5, '#FFFF00', '#FFD700', star.scale);
+                }
             }
 
-
-            let playerColor1 = '#FFFFFF'; let playerColor2 = '#87CEEB';
-            if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 5) % 2 === 0) { playerColor1 = '#FFD700'; playerColor2 = '#FF4500'; }
+            for (const powerUp of powerUps) {
+                powerUp.draw(ctx);
+            }
+            
+            for (const enemy of enemies) {
+                drawTriangleWithGradient(enemy.x, enemy.y, enemy.size, '#FF0000', '#8B0000');
+            }
+            
+            let playerColor1 = '#FFFFFF';
+            let playerColor2 = '#87CEEB';
+            if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 5) % 2 === 0) { 
+                playerColor1 = '#FFD700'; 
+                playerColor2 = '#FF4500'; 
+            }
             drawCircleWithGradient(player.x, player.y, player.radius, playerColor1, playerColor2, player.scale);
 
-            for (const particle of particles) { particle.draw(ctx); }
+            for (const particle of particles) {
+                particle.draw(ctx);
+            }
+            
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 20px Arial'; 
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic'; // Reset text baseline for top-aligned text
 
-            // HUD Text
-            const hudFontSize = Math.min(20, Math.max(12, canvas.height * 0.03)); // Responsive font size
-            ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = Math.max(2, hudFontSize * 0.15);
-            ctx.font = `bold ${hudFontSize}px Arial`;
-            ctx.textAlign = 'left'; ctx.textBaseline = 'top'; // Consistent baseline
+            ctx.strokeText(`Score: ${score}`, 10, 30);
+            ctx.fillText(`Score: ${score}`, 10, 30);
 
-            const scoreText = `Score: ${score}`;
-            const levelText = `Level: ${level}`;
-            const livesText = `Lives: `;
-            const textX = 10;
-            const lineSpacing = hudFontSize * 1.5;
+            ctx.strokeText(`Level: ${level}`, 10, 60);
+            ctx.fillText(`Level: ${level}`, 10, 60);
 
-            ctx.strokeText(scoreText, textX, 10); ctx.fillText(scoreText, textX, 10);
-            ctx.strokeText(levelText, textX, 10 + lineSpacing); ctx.fillText(levelText, textX, 10 + lineSpacing);
+            // Replaced emoji lives with drawn circles
+            ctx.strokeText(`Lives:`, 10, 90);
+            ctx.fillText(`Lives:`, 10, 90);
 
-            ctx.strokeText(livesText, textX, 10 + lineSpacing * 2); ctx.fillText(livesText, textX, 10 + lineSpacing * 2);
-            const livesTextWidth = ctx.measureText(livesText).width;
-            const heartSize = hudFontSize * 0.9;
-            const heartY = 10 + lineSpacing * 2 + heartSize * 0.4; // Align hearts with text line
+            const heartXStart = 85; // Starting X position for lives circles
+            const heartY = 85;      // Y position for lives circles
+            const heartRadius = 8;  // Radius of each life circle
+            const heartSpacing = 20; // Space between life circles
 
             for (let i = 0; i < player.lives; i++) {
-                drawHeart(ctx, textX + livesTextWidth + (i * (heartSize + 5)) + heartSize / 2, heartY, heartSize);
+                const currentHeartX = heartXStart + i * heartSpacing;
+                ctx.beginPath();
+                ctx.arc(currentHeartX, heartY, heartRadius, 0, Math.PI * 2);
+                ctx.fillStyle = 'red'; 
+                ctx.strokeStyle = 'darkred';
+                ctx.lineWidth = 1;
+                ctx.fill();
+                ctx.stroke();
             }
         }
 
-
-        function drawScreenMessage(title, message, titleColor, messageColor, titleBaseSize, messageBaseSize) {
-            const titleSize = Math.min(titleBaseSize, canvas.width * 0.08); // Responsive
-            const messageSize = Math.min(messageBaseSize, canvas.width * 0.05);
-
-            ctx.fillStyle = titleColor; ctx.strokeStyle = 'black'; ctx.lineWidth = Math.max(2, titleSize * 0.1);
-            ctx.font = `bold ${titleSize}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.strokeText(title, canvas.width / 2, canvas.height / 2 - messageSize * 1.2);
-            ctx.fillText(title, canvas.width / 2, canvas.height / 2 - messageSize * 1.2);
+        function drawScreenMessage(title, message, titleColor, messageColor, titleSize, messageSize) {
+            ctx.fillStyle = titleColor;
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 4;
+            ctx.font = `bold ${titleSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'alphabetic'; // Reset baseline
+            ctx.strokeText(title, GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 - 20);
+            ctx.fillText(title, GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 - 20);
 
             if (message) {
-                ctx.fillStyle = messageColor; ctx.lineWidth = Math.max(1, messageSize * 0.1);
+                ctx.fillStyle = messageColor;
                 ctx.font = `bold ${messageSize}px Arial`;
-                ctx.strokeText(message, canvas.width / 2, canvas.height / 2 + messageSize * 0.8);
-                ctx.fillText(message, canvas.width / 2, canvas.height / 2 + messageSize * 0.8);
+                ctx.lineWidth = 3;
+                ctx.strokeText(message, GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 20);
+                ctx.fillText(message, GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 20);
             }
         }
-
 
         function drawStartScreen() {
             drawBackground();
             drawScreenMessage("REACH FOR THE STARS", "Press SPACE to Start", 'cyan', 'white', 40, 25);
-
-            const helpTextSize = Math.min(18, canvas.width * 0.04);
-            ctx.font = `bold ${helpTextSize}px Arial`;
-            ctx.lineWidth = Math.max(1, helpTextSize * 0.1);
-            ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.textAlign = 'center';
-            const line1Y = canvas.height / 2 + helpTextSize * 3;
-            const lineSpacing = helpTextSize * 1.5;
-
-            ctx.strokeText("Controls: Arrow Keys/On-Screen to Move, SPACE/JUMP to Jump", canvas.width / 2, line1Y);
-            ctx.fillText("Controls: Arrow Keys/On-Screen to Move, SPACE/JUMP to Jump", canvas.width / 2, line1Y);
-            ctx.strokeText("Collect all stars to find the EXIT!", canvas.width / 2, line1Y + lineSpacing);
-            ctx.fillText("Collect all stars to find the EXIT!", canvas.width / 2, line1Y + lineSpacing);
-            ctx.strokeText("P / ESC: Pause Game", canvas.width / 2, line1Y + lineSpacing * 2);
-            ctx.fillText("P / ESC: Pause Game", canvas.width / 2, line1Y + lineSpacing * 2);
+            ctx.font = 'bold 18px Arial';
+            ctx.lineWidth = 2;
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.textAlign = 'center'; // Ensure text is centered
+            ctx.strokeText("Controls: Arrow Keys to Move, SPACE to Jump", GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 70);
+            ctx.fillText("Controls: Arrow Keys to Move, SPACE to Jump", GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 70);
+            ctx.strokeText("Collect all stars to find the EXIT!", GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 100);
+            ctx.fillText("Collect all stars to find the EXIT!", GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 100);
+            ctx.strokeText("P / ESC: Pause Game", GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 130);
+            ctx.fillText("P / ESC: Pause Game", GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 130);
         }
 
         function drawPausedScreen() {
-            drawGameElements();
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawGameElements(); 
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; 
+            ctx.fillRect(0, 0, GAME_RESOLUTION_WIDTH, GAME_RESOLUTION_HEIGHT);
             drawScreenMessage("PAUSED", "Press P or ESC to Resume", 'yellow', 'white', 40, 25);
         }
 
         function drawGameOverScreen() {
             drawBackground();
             drawScreenMessage("GAME OVER", `Final Score: ${gameOverFinalScore}`, 'red', 'white', 40, 25);
+            
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 25px Arial';
+            ctx.textAlign = 'center';
+            ctx.strokeText(`High Score: ${highScore}`, GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 60);
+            ctx.fillText(`High Score: ${highScore}`, GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 60);
 
-            const scoreFontSize = Math.min(25, canvas.width * 0.06);
-            const restartFontSize = Math.min(20, canvas.width * 0.05);
-            ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = Math.max(2, scoreFontSize*0.1);
-            ctx.font = `bold ${scoreFontSize}px Arial`; ctx.textAlign = 'center';
-            ctx.strokeText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + scoreFontSize * 2);
-            ctx.fillText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + scoreFontSize * 2);
-
-            ctx.font = `bold ${restartFontSize}px Arial`;
-            ctx.lineWidth = Math.max(1, restartFontSize*0.1);
-            ctx.strokeText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2 + scoreFontSize * 2 + restartFontSize * 2);
-            ctx.fillText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2 + scoreFontSize * 2 + restartFontSize * 2);
+            ctx.font = 'bold 20px Arial';
+            ctx.strokeText('Press SPACE to Restart', GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 100);
+            ctx.fillText('Press SPACE to Restart', GAME_RESOLUTION_WIDTH / 2, GAME_RESOLUTION_HEIGHT / 2 + 100);
         }
-
 
         function drawTransitionOverlay() {
             ctx.fillStyle = `rgba(0, 0, 0, ${transitionAlpha})`;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, GAME_RESOLUTION_WIDTH, GAME_RESOLUTION_HEIGHT);
         }
 
         function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (gameState === 'start') { drawStartScreen(); }
-            else if (gameState === 'playing' || gameState === 'paused' || gameState === 'transitioning') {
+            ctx.clearRect(0, 0, GAME_RESOLUTION_WIDTH, GAME_RESOLUTION_HEIGHT);
+
+            if (gameState === 'start') {
+                drawStartScreen();
+            } else if (gameState === 'playing' || gameState === 'paused' || gameState === 'levelComplete' || gameState === 'transitioning') {
                 drawGameElements();
-                if (gameState === 'paused') drawPausedScreen();
-            } else if (gameState === 'gameOver') { drawGameOverScreen(); }
-
-            if (gameState === 'transitioning') drawTransitionOverlay();
+                if (gameState === 'paused') {
+                    drawPausedScreen();
+                }
+            } else if (gameState === 'gameOver') {
+                drawGameOverScreen();
+            }
+            
+            if (gameState === 'transitioning') {
+                drawTransitionOverlay();
+            }
         }
-
+        
         function resetGame() {
-            player.lives = 3; score = 0; level = 1; platformBaseSpeed = 0.7;
-            initLevel(); // This will re-initialize based on current canvas size
+            player.lives = 3;
+            score = 0;
+            level = 1;
+            platformBaseSpeed = 0.7;
+            
+            initLevel(); 
+            
             gameState = 'playing';
-            player.canTakeDamage = true; clearTimeout(player.damageCooldownTimeout);
-            player.invincible = false; player.invincibleTimer = 0;
-            player.speedBoost = false; player.speedBoostTimer = 0;
-            transitionAlpha = 0; transitionSpeed = Math.abs(transitionSpeed); transitionCallback = null;
+            player.canTakeDamage = true;
+            clearTimeout(player.damageCooldownTimeout); 
+            player.invincible = false;
+            player.invincibleTimer = 0;
+            player.speedBoost = false;
+            player.speedBoostTimer = 0;
+            
+            transitionAlpha = 0;
+            transitionSpeed = Math.abs(transitionSpeed);
+            transitionCallback = null;
             playerCanMove = true;
-            particles = [];
-            startMusic();
-        }
 
+            particles = []; 
+            startMusic(); 
+        }
+        
         function gameLoop() {
             update();
             draw();
             requestAnimationFrame(gameLoop);
         }
-
-        initLevel(); // Initialize level based on initial canvas size
+        
+        initLevel();
         gameLoop();
     </script>
 </body>

@@ -152,7 +152,7 @@
         // --- Game Speed Control ---
         const isAndroid = /Android/i.test(navigator.userAgent);
         // Original: const gameSpeedFactor = isAndroid ? 0.5 : 1.0; // Make Android much slower
-        const gameSpeedFactor = 0.35;
+        const gameSpeedFactor = 0.4;
 
         // --- Physics Constants (Scaled by gameSpeedFactor) ---
         const GRAVITY = 0.15 * gameSpeedFactor; //0.3
@@ -825,8 +825,8 @@
             // Green starting platform
             platforms.push({
                 x: 20,
-                y: 125, // Fixed Y for consistent start (relatively high)
-                width: 100,
+                y: 85, // Fixed Y for consistent start (relatively high)
+                width: 125,
                 height: 20,
                 color1: '#006400', 
                 color2: '#004d00', 

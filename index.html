@@ -155,8 +155,8 @@
         const gameSpeedFactor = 0.5;
 
         // --- Physics Constants (Scaled by gameSpeedFactor) ---
-        const GRAVITY = 0.3 * gameSpeedFactor;
-        const PLAYER_BASE_SPEED = 3 * gameSpeedFactor; // 4
+        const GRAVITY = 0.4 * gameSpeedFactor;
+        const PLAYER_BASE_SPEED = 4 * gameSpeedFactor; // 4
         const PLAYER_BASE_JUMP = -9 * gameSpeedFactor; // Jump velocity is negative (upwards)
 
         // Derived constants for platform/star generation
@@ -166,7 +166,7 @@
         // Minimum vertical gap between platforms (top of lower to bottom of upper)
         const MIN_PLATFORM_VERTICAL_GAP = MAX_JUMP_HEIGHT * 0.5; // Half of actual jump height
         // Maximum vertical gap between platforms (top of lower to bottom of upper)
-        const MAX_PLATFORM_VERTICAL_GAP = MAX_JUMP_HEIGHT * 0.8; // 3/4 of actual jump height
+        const MAX_PLATFORM_VERTICAL_GAP = MAX_JUMP_HEIGHT * 0.75; // 3/4 of actual jump height
 
         // Global platform/exit geometry constants
         const DEADLY_PLATFORM_HEIGHT = 20;

@@ -151,7 +151,8 @@
         
         // --- Game Speed Control ---
         const isAndroid = /Android/i.test(navigator.userAgent);
-        const gameSpeedFactor = isAndroid ? 0.5 : 1.0; // Make Android much slower
+        //const gameSpeedFactor = isAndroid ? 0.5 : 1.0; // Make Android much slower
+        const gameSpeedFactor = 0.5;
 
         // --- Physics Constants (Scaled by gameSpeedFactor) ---
         const GRAVITY = 0.3 * gameSpeedFactor;

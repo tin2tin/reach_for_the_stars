@@ -151,12 +151,12 @@
         
         // --- Game Speed Control ---
         const isAndroid = /Android/i.test(navigator.userAgent);
-        //const gameSpeedFactor = isAndroid ? 0.5 : 1.0; // Make Android much slower
-        const gameSpeedFactor = 0.5;
+        // Original: const gameSpeedFactor = isAndroid ? 0.5 : 1.0; // Make Android much slower
+        const gameSpeedFactor = 0.6; // MODIFIED: Set a universal game speed factor to make it slower for all users
 
         // --- Physics Constants (Scaled by gameSpeedFactor) ---
-        const GRAVITY = 0.4 * gameSpeedFactor;
-        const PLAYER_BASE_SPEED = 4 * gameSpeedFactor; // 4
+        const GRAVITY = 0.3 * gameSpeedFactor;
+        const PLAYER_BASE_SPEED = 4 * gameSpeedFactor;
         const PLAYER_BASE_JUMP = -9 * gameSpeedFactor; // Jump velocity is negative (upwards)
 
         // Derived constants for platform/star generation

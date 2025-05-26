@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Reach for the Stars</title>
+    <title>Platform Game</title>
     <style>
         body {
             margin: 0;
@@ -53,75 +53,76 @@
             background: linear-gradient(to bottom, #c44d4d, #ff6b6b);
         }
 
-        /* --- Mobile Controls Styling --- */
+/* --- Mobile Controls Styling --- */
+    #mobile-controls {
+        position: absolute;
+        /* Adjust positioning to be very close to the bottom */
+        bottom: 5px; /* Very close to lower edge */
+        left: 5px; /* Small margin */
+        right: 5px; /* Small margin */
+        display: none; /* Hidden by default */
+        justify-content: space-between;
+        align-items: flex-end;
+        z-index: 10;
+        padding: 5px; /* Small padding around buttons */
+    }
+
+    #mobile-controls .control-group {
+        display: flex;
+        gap: 10px;
+    }
+
+    #mobile-controls button {
+        /* Ensuring consistent button size */
+        width: 70px; /* Fixed width */
+        height: 70px; /* Fixed height for circular buttons */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(to bottom, #4CAF50, #2E8B57);
+        border: 2px solid black;
+        border-radius: 50%;
+        color: white;
+        font-size: 16px; /* Slightly smaller font to fit text */
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        touch-action: manipulation;
+        text-align: center; /* Ensure text is centered */
+        line-height: 1; /* Prevent extra line height */
+    }
+
+    #mobile-controls button:active {
+        background: linear-gradient(to bottom, #2E8B57, #4CAF50);
+        box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5);
+    }
+
+    /* Only show mobile controls on smaller screens (e.g., typical mobile viewport) */
+    @media (max-width: 768px) {
         #mobile-controls {
-            position: absolute;
-            /* Adjust positioning to be very close to the bottom */
-            bottom: 5px; /* Very close to lower edge */
-            left: 5px; /* Small margin */
-            right: 5px; /* Small margin */
-            display: none; /* Hidden by default */
-            justify-content: space-between;
-            align-items: flex-end;
-            z-index: 10;
-            padding: 5px; /* Small padding around buttons */
+            display: flex; /* Show mobile controls */
+            height: fit-content; /* Limit the container height to its content */
         }
+        body {
+             flex-direction: column;
+             justify-content: flex-start; /* Align to top to give canvas space */
+             align-items: center; /* Center horizontally */
+        }
+        canvas {
+            max-height: calc(100vh - 120px); /* Canvas takes remaining height, with margin */
+            margin-top: 10px; /* Space from top controls */
+        }
+        #controls {
+            top: 5px;
+            right: 5px;
+        }
+    }
+</style>
 
-        #mobile-controls .control-group {
-            display: flex;
-            gap: 10px;
-        }
-
-        #mobile-controls button {
-            /* Ensuring consistent button size */
-            width: 70px; /* Fixed width */
-            height: 70px; /* Fixed height for circular buttons */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: linear-gradient(to bottom, #4CAF50, #2E8B57);
-            border: 2px solid black;
-            border-radius: 50%;
-            color: white;
-            font-size: 16px; /* Slightly smaller font to fit text */
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-            touch-action: manipulation;
-            text-align: center; /* Ensure text is centered */
-            line-height: 1; /* Prevent extra line height */
-        }
-
-        #mobile-controls button:active {
-            background: linear-gradient(to bottom, #2E8B57, #4CAF50);
-            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5);
-        }
-
-        /* Only show mobile controls on smaller screens (e.g., typical mobile viewport) */
-        @media (max-width: 768px) {
-            #mobile-controls {
-                display: flex; /* Show mobile controls */
-                height: fit-content; /* Limit the container height to its content */
-            }
-            body {
-                 flex-direction: column;
-                 justify-content: flex-start; /* Align to top to give canvas space */
-                 align-items: center; /* Center horizontally */
-            }
-            canvas {
-                max-height: calc(100vh - 120px); /* Canvas takes remaining height, with margin */
-                margin-top: 10px; /* Space from top controls */
-            }
-            #controls {
-                top: 5px;
-                right: 5px;
-            }
-        }
-    </style>
 </head>
 <body>
     <div id="controls">
@@ -129,1534 +130,1533 @@
         <button id="mute-button" class="control-button">Mute Music</button>
     </div>
     <canvas id="gameCanvas"></canvas>
-    
-    <div id="mobile-controls">
-        <div class="control-group">
-            <button id="left-btn">LEFT</button>
-            <button id="right-btn">RIGHT</button>
-        </div>
-        <button id="jump-btn">JUMP</button>
+
+<div id="mobile-controls">
+    <div class="control-group">
+        <button id="left-btn">LEFT</button>
+        <button id="right-btn">RIGHT</button>
     </div>
+    <button id="jump-btn">JUMP</button>
+</div>
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        
-        // --- Canvas Size (Fixed Internal Resolution) ---
-        const TARGET_CANVAS_WIDTH = 600;
-        const TARGET_CANVAS_HEIGHT = 900;
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // --- Canvas Size (Fixed Internal Resolution) ---
+    const TARGET_CANVAS_WIDTH = 600;
+    const TARGET_CANVAS_HEIGHT = 900;
 
-        canvas.width = TARGET_CANVAS_WIDTH;
-        canvas.height = TARGET_CANVAS_HEIGHT;
-        
-        // --- Game Speed Control ---
-        const isAndroid = /Android/i.test(navigator.userAgent);
-        // Original: const gameSpeedFactor = isAndroid ? 0.5 : 1.0; // Make Android much slower
-        const gameSpeedFactor = 0.4;
+    canvas.width = TARGET_CANVAS_WIDTH;
+    canvas.height = TARGET_CANVAS_HEIGHT;
+    
+    // --- Game Speed Control ---
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const gameSpeedFactor = isAndroid ? 0.5 : 1.0; // Make Android much slower
 
-        // --- Physics Constants (Scaled by gameSpeedFactor) ---
-        const GRAVITY = 0.15 * gameSpeedFactor; //0.3
-        const PLAYER_BASE_SPEED = 3 * gameSpeedFactor;
-        const PLAYER_BASE_JUMP = -11 * gameSpeedFactor; // Jump velocity is negative (upwards)
+    // --- Physics Constants (Scaled by gameSpeedFactor) ---
+    const GRAVITY = 0.3 * gameSpeedFactor;
+    const PLAYER_BASE_SPEED = 4 * gameSpeedFactor;
+    const PLAYER_BASE_JUMP = -9 * gameSpeedFactor; // Jump velocity is negative (upwards)
 
-        // Derived constants for platform/star generation
-        // MAX_JUMP_HEIGHT formula: h = v^2 / (2g)
-        const MAX_JUMP_HEIGHT = (PLAYER_BASE_JUMP * PLAYER_BASE_JUMP) / (2 * GRAVITY);
+    // Derived constants for platform/star generation
+    // MAX_JUMP_HEIGHT formula: h = v^2 / (2g)
+    const MAX_JUMP_HEIGHT = (PLAYER_BASE_JUMP * PLAYER_BASE_JUMP) / (2 * GRAVITY);
 
-        // Minimum vertical gap between platforms (top of lower to bottom of upper)
-        const MIN_PLATFORM_VERTICAL_GAP = MAX_JUMP_HEIGHT * 0.5; // Half of actual jump height
-        // Maximum vertical gap between platforms (top of lower to bottom of upper)
-        const MAX_PLATFORM_VERTICAL_GAP = MAX_JUMP_HEIGHT * 0.75; // 3/4 of actual jump height
+    // Minimum vertical gap between platforms (top of lower to bottom of upper)
+    const MIN_PLATFORM_VERTICAL_GAP = MAX_JUMP_HEIGHT * 0.5; // Half of actual jump height
+    // Maximum vertical gap between platforms (top of lower to bottom of upper)
+    const MAX_PLATFORM_VERTICAL_GAP = MAX_JUMP_HEIGHT * 0.75; // 3/4 of actual jump height
 
-        // Global platform/exit geometry constants
-        const DEADLY_PLATFORM_HEIGHT = 20;
-        const EXIT_PLATFORM_HEIGHT = 20;
-        const EFFECTIVE_EXIT_PLATFORM_Y = TARGET_CANVAS_HEIGHT - DEADLY_PLATFORM_HEIGHT - EXIT_PLATFORM_HEIGHT;
+    // Global platform/exit geometry constants
+    const DEADLY_PLATFORM_HEIGHT = 20;
+    const EXIT_PLATFORM_HEIGHT = 20;
+    const EFFECTIVE_EXIT_PLATFORM_Y = TARGET_CANVAS_HEIGHT - DEADLY_PLATFORM_HEIGHT - EXIT_PLATFORM_HEIGHT;
 
-        const keys = {};
-        window.addEventListener('keydown', e => {
-            keys[e.key] = true;
-            if (e.key === ' ') e.preventDefault(); 
-        });
-        window.addEventListener('keyup', e => keys[e.key] = false);
-        
-        document.getElementById('restart').addEventListener('click', () => {
-            if (gameState === 'gameOver' || confirm("Are you sure you want to restart? Your progress will be lost.")) {
-                resetGame();
-            }
-        });
-        
-        // --- Hide controls on Android ---
-        const controlsDiv = document.getElementById('controls');
-        if (isAndroid) {
-            controlsDiv.style.display = 'none';
+    const keys = {};
+    window.addEventListener('keydown', e => {
+        keys[e.key] = true;
+        if (e.key === ' ') e.preventDefault(); 
+    });
+    window.addEventListener('keyup', e => keys[e.key] = false);
+    
+    document.getElementById('restart').addEventListener('click', () => {
+        if (gameState === 'gameOver' || confirm("Are you sure you want to restart? Your progress will be lost.")) {
+            resetGame();
         }
+    });
+    
+    // --- Hide controls on Android ---
+    const controlsDiv = document.getElementById('controls');
+    if (isAndroid) {
+        controlsDiv.style.display = 'none';
+    }
 
-        // --- Audio Setup ---
-        let audioContext;
-        let bgMusic;
-        let isMuted = false;
+    // --- Audio Setup ---
+    let audioContext;
+    let bgMusic;
+    let isMuted = false;
+    
+    function createOscillatorSound(frequency, duration, type = 'sine', startTime = 0) {
+        if (isMuted) return;
+        // Only play sounds if in playing or level complete state (not during menu/pause)
+        if (gameState !== 'playing' && gameState !== 'levelComplete') return; 
         
-        function createOscillatorSound(frequency, duration, type = 'sine', startTime = 0) {
-            if (isMuted) return;
-            // Only play sounds if in playing or level complete state (not during menu/pause)
-            if (gameState !== 'playing' && gameState !== 'levelComplete') return; 
-            
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            
-            const actualStartTime = audioContext.currentTime + startTime;
-
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.type = type;
-            oscillator.frequency.setValueAtTime(frequency, actualStartTime);
-            
-            gainNode.gain.setValueAtTime(0.5, actualStartTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration);
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.start(actualStartTime);
-            oscillator.stop(actualStartTime + duration);
-        }
-
-        function playJumpSound() { createOscillatorSound(600, 0.1, 'triangle'); emitParticles(player.x, player.y + player.radius, 'jump_puff'); }
-        function playLandSound() { createOscillatorSound(200, 0.08, 'square'); emitParticles(player.x, player.y + player.radius, 'dust'); }
-        function playStarSound() { createOscillatorSound(800, 0.05, 'sine'); createOscillatorSound(1000, 0.05, 'sine', 0.05); emitParticles(player.x, player.y, 'sparkle'); }
-        function playEnemyHitSound() { createOscillatorSound(80, 0.2, 'sawtooth'); createOscillatorSound(40, 0.2, 'triangle'); emitParticles(player.x, player.y, 'hit_splatter'); }
-        function playLifeLostSound() { createOscillatorSound(150, 0.3, 'sawtooth'); createOscillatorSound(75, 0.3, 'triangle', 0.05); }
-        function playLevelCompleteSound() { createOscillatorSound(600, 0.1, 'triangle'); createOscillatorSound(800, 0.1, 'triangle', 0.1); createOscillatorSound(1000, 0.1, 'triangle', 0.2); }
-        function playGameOverSound() { createOscillatorSound(200, 0.4, 'sine'); createOscillatorSound(100, 0.5, 'sine', 0.2); }
-        function playPowerUpSound() { createOscillatorSound(1200, 0.08, 'sine'); createOscillatorSound(1500, 0.08, 'sine', 0.03); }
-
-        const muteButton = document.getElementById('mute-button');
-        muteButton.addEventListener('click', toggleMute);
-
-        function toggleMute() {
-            isMuted = !isMuted;
-            if (bgMusic) {
-                bgMusic.muted = isMuted;
-            }
-            muteButton.textContent = isMuted ? 'Unmute Music' : 'Mute Music';
-            if (!isMuted && bgMusic && bgMusic.paused && gameState === 'playing') {
-                bgMusic.play().catch(e => console.error("Music autoplay failed after unmuting:", e));
-            } else if (isMuted && bgMusic && !bgMusic.paused) {
-                bgMusic.pause();
-            }
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
         
-        function startMusic() {
-            if (!bgMusic) {
-                bgMusic = new Audio('https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Cycling%20Platforms.mp3');
-                bgMusic.loop = true;
-                bgMusic.volume = 0.3;
-            }
+        const actualStartTime = audioContext.currentTime + startTime;
+
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, actualStartTime);
+        
+        gainNode.gain.setValueAtTime(0.5, actualStartTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.start(actualStartTime);
+        oscillator.stop(actualStartTime + duration);
+    }
+
+    function playJumpSound() { createOscillatorSound(600, 0.1, 'triangle'); emitParticles(player.x, player.y + player.radius, 'jump_puff'); }
+    function playLandSound() { createOscillatorSound(200, 0.08, 'square'); emitParticles(player.x, player.y + player.radius, 'dust'); }
+    function playStarSound() { createOscillatorSound(800, 0.05, 'sine'); createOscillatorSound(1000, 0.05, 'sine', 0.05); emitParticles(player.x, player.y, 'sparkle'); }
+    function playEnemyHitSound() { createOscillatorSound(80, 0.2, 'sawtooth'); createOscillatorSound(40, 0.2, 'triangle'); emitParticles(player.x, player.y, 'hit_splatter'); }
+    function playLifeLostSound() { createOscillatorSound(150, 0.3, 'sawtooth'); createOscillatorSound(75, 0.3, 'triangle', 0.05); }
+    function playLevelCompleteSound() { createOscillatorSound(600, 0.1, 'triangle'); createOscillatorSound(800, 0.1, 'triangle', 0.1); createOscillatorSound(1000, 0.1, 'triangle', 0.2); }
+    function playGameOverSound() { createOscillatorSound(200, 0.4, 'sine'); createOscillatorSound(100, 0.5, 'sine', 0.2); }
+    function playPowerUpSound() { createOscillatorSound(1200, 0.08, 'sine'); createOscillatorSound(1500, 0.08, 'sine', 0.03); }
+
+    const muteButton = document.getElementById('mute-button');
+    muteButton.addEventListener('click', toggleMute);
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        if (bgMusic) {
             bgMusic.muted = isMuted;
-            if (!isMuted && bgMusic.paused) {
-                bgMusic.play().catch(e => console.error("Music autoplay failed:", e));
+        }
+        muteButton.textContent = isMuted ? 'Unmute Music' : 'Mute Music';
+        if (!isMuted && bgMusic && bgMusic.paused && gameState === 'playing') {
+            bgMusic.play().catch(e => console.error("Music autoplay failed after unmuting:", e));
+        } else if (isMuted && bgMusic && !bgMusic.paused) {
+            bgMusic.pause();
+        }
+    }
+    
+    function startMusic() {
+        if (!bgMusic) {
+            bgMusic = new Audio('https://github.com/tin2tin/reach_for_the_stars/raw/refs/heads/main/Cycling%20Platforms.mp3');
+            bgMusic.loop = true;
+            bgMusic.volume = 0.3;
+        }
+        bgMusic.muted = isMuted;
+        if (!isMuted && bgMusic.paused) {
+            bgMusic.play().catch(e => console.error("Music autoplay failed:", e));
+        }
+    }
+
+    document.body.addEventListener('click', () => {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        startMusic();
+    }, { once: true });
+    
+    // --- Mobile Controls Event Listeners ---
+    const leftBtn = document.getElementById('left-btn');
+    const rightBtn = document.getElementById('right-btn');
+    const jumpBtn = document.getElementById('jump-btn');
+
+    function setupTouchControl(btn, key) {
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault(); 
+            keys[key] = true;
+        });
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys[key] = false;
+        });
+        btn.addEventListener('mousedown', () => keys[key] = true);
+        btn.addEventListener('mouseup', () => keys[key] = false);
+        btn.addEventListener('mouseleave', () => keys[key] = false); 
+    }
+
+    setupTouchControl(leftBtn, 'ArrowLeft');
+    setupTouchControl(rightBtn, 'ArrowRight');
+    setupTouchControl(jumpBtn, ' '); 
+    
+    // --- Game State Variables ---
+    let player = {
+        x: 50,
+        y: 50,
+        radius: 15,
+        vx: 0,
+        vy: 0,
+        onGround: false,
+        lives: 3,
+        scale: 1,
+        canTakeDamage: true,
+        damageCooldownTimeout: null,
+        invincible: false, 
+        invincibleTimer: 0,
+        speedBoost: false, 
+        speedBoostTimer: 0,
+        baseSpeed: PLAYER_BASE_SPEED, // Initialized from constant
+        baseJump: PLAYER_BASE_JUMP    // Initialized from constant
+    };
+    
+    let platforms = [];
+    let enemies = [];
+    let stars = [];
+    let powerUps = []; 
+    let particles = []; 
+    let backgroundParticles = []; // NEW: Array for background effects
+    let exitPlatform = null; // Exit platform is initially null
+    let score = 0;
+    let level = 1;
+    let gameState = 'start';
+    let platformBaseSpeed = 0.7; // This base value is NOT scaled by gameSpeedFactor, only when used.
+    let backgroundColors = [];
+    let highScore = parseInt(localStorage.getItem('platformGameHighScore') || '0', 10);
+    let gameOverFinalScore = 0;
+
+    // Transition variables
+    let transitionAlpha = 0;
+    let transitionSpeed = 0.03;
+    let transitionCallback = null;
+    let playerCanMove = false;
+    
+    // Global constant for special platform types
+    const SPECIAL_PLATFORM_TYPES = ['disappearing', 'bouncy', 'conveyor'];
+
+    // --- Particle Class (for game effects) ---
+    class Particle {
+        constructor(x, y, type, color, size, vx, vy, lifetime) {
+            this.x = x;
+            this.y = y;
+            this.type = type;
+            this.color = color;
+            this.size = size;
+            this.vx = vx;
+            this.vy = vy;
+            this.alpha = 1;
+            this.lifetime = lifetime;
+            this.originalLifetime = lifetime;
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += GRAVITY / 3; // Particle specific gravity, scaled with game GRAVITY
+            this.lifetime--;
+            this.alpha = this.lifetime / this.originalLifetime;
+            if (this.type === 'sparkle') {
+                this.size *= 0.98; 
+            } else {
+                this.size *= 0.95; 
             }
         }
 
-        document.body.addEventListener('click', () => {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            startMusic();
-        }, { once: true });
-        
-        // --- Mobile Controls Event Listeners ---
-        const leftBtn = document.getElementById('left-btn');
-        const rightBtn = document.getElementById('right-btn');
-        const jumpBtn = document.getElementById('jump-btn');
-
-        function setupTouchControl(btn, key) {
-            btn.addEventListener('touchstart', (e) => {
-                e.preventDefault(); 
-                keys[key] = true;
-            });
-            btn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                keys[key] = false;
-            });
-            btn.addEventListener('mousedown', () => keys[key] = true);
-            btn.addEventListener('mouseup', () => keys[key] = false);
-            btn.addEventListener('mouseleave', () => keys[key] = false); 
-        }
-
-        setupTouchControl(leftBtn, 'ArrowLeft');
-        setupTouchControl(rightBtn, 'ArrowRight');
-        setupTouchControl(jumpBtn, ' '); 
-        
-        // --- Game State Variables ---
-        let player = {
-            x: 50,
-            y: 50,
-            radius: 15,
-            vx: 0,
-            vy: 0,
-            onGround: false,
-            lives: 3,
-            scale: 1,
-            canTakeDamage: true,
-            damageCooldownTimeout: null,
-            invincible: false, 
-            invincibleTimer: 0,
-            speedBoost: false, 
-            speedBoostTimer: 0,
-            baseSpeed: PLAYER_BASE_SPEED, // Initialized from constant
-            baseJump: PLAYER_BASE_JUMP    // Initialized from constant
-        };
-        
-        let platforms = [];
-        let enemies = [];
-        let stars = [];
-        let powerUps = []; 
-        let particles = []; 
-        let backgroundParticles = []; // NEW: Array for background effects
-        let exitPlatform = null; // Exit platform is initially null
-        let score = 0;
-        let level = 1;
-        let gameState = 'start';
-        let platformBaseSpeed = 0.7; // This base value is NOT scaled by gameSpeedFactor, only when used.
-        let backgroundColors = [];
-        let highScore = parseInt(localStorage.getItem('platformGameHighScore') || '0', 10);
-        let gameOverFinalScore = 0;
-
-        // Transition variables
-        let transitionAlpha = 0;
-        let transitionSpeed = 0.03;
-        let transitionCallback = null;
-        let playerCanMove = false;
-        
-        // Global constant for special platform types
-        const SPECIAL_PLATFORM_TYPES = ['disappearing', 'bouncy', 'conveyor'];
-
-        // --- Particle Class (for game effects) ---
-        class Particle {
-            constructor(x, y, type, color, size, vx, vy, lifetime) {
-                this.x = x;
-                this.y = y;
-                this.type = type;
-                this.color = color;
-                this.size = size;
-                this.vx = vx;
-                this.vy = vy;
-                this.alpha = 1;
-                this.lifetime = lifetime;
-                this.originalLifetime = lifetime;
-            }
-
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.vy += GRAVITY / 3; // Particle specific gravity, scaled with game GRAVITY
-                this.lifetime--;
-                this.alpha = this.lifetime / this.originalLifetime;
-                if (this.type === 'sparkle') {
-                    this.size *= 0.98; 
-                } else {
-                    this.size *= 0.95; 
-                }
-            }
-
-            draw(ctx) {
-                ctx.save();
-                ctx.globalAlpha = this.alpha;
-                ctx.fillStyle = this.color;
-                if (this.type === 'sparkle') {
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (this.type === 'dust' || this.type === 'jump_puff') {
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (this.type === 'hit_splatter') {
-                    ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
-                }
-                ctx.restore();
-            }
-        }
-
-        function emitParticles(x, y, type) {
-            let numParticles = 0;
-            let color = '';
-            let minSize = 0;
-            let maxSize = 0;
-            let minVx = -2;
-            let maxVx = 2;
-            let minVy = -3;
-            let maxVy = -1;
-            let lifetime = 30; // Base lifetime, scaled by gameSpeedFactor
-
-            switch (type) {
-                case 'sparkle':
-                    numParticles = 5 + Math.random() * 5;
-                    color = 'yellow';
-                    minSize = 3; maxSize = 6;
-                    minVx = -2; maxVx = 2;
-                    minVy = -2; maxVy = 2; 
-                    lifetime = Math.floor(40 / gameSpeedFactor);
-                    break;
-                case 'dust':
-                    numParticles = 3 + Math.random() * 3;
-                    color = 'grey';
-                    minSize = 4; maxSize = 8;
-                    minVx = -1; maxVx = 1;
-                    minVy = -1; maxVy = -0.5;
-                    lifetime = Math.floor(20 / gameSpeedFactor);
-                    break;
-                case 'jump_puff':
-                    numParticles = 5 + Math.random() * 5;
-                    color = 'lightblue';
-                    minSize = 5; maxSize = 10;
-                    minVx = -1; maxVx = 1;
-                    minVy = 1; maxVy = 3; 
-                    lifetime = Math.floor(25 / gameSpeedFactor);
-                    break;
-                case 'hit_splatter':
-                    numParticles = 8 + Math.random() * 7;
-                    color = 'red';
-                    minSize = 4; maxSize = 10;
-                    minVx = -3; maxVx = 3;
-                    minVy = -4; maxVy = 0;
-                    lifetime = Math.floor(30 / gameSpeedFactor);
-                    break;
-            }
-
-            for (let i = 0; i < numParticles; i++) {
-                particles.push(new Particle(
-                    x + (Math.random() - 0.5) * 5,
-                    y + (Math.random() - 0.5) * 5,
-                    type,
-                    color,
-                    minSize + Math.random() * (maxSize - minSize),
-                    minVx + Math.random() * (maxVx - minVx),
-                    minVy + Math.random() * (maxVy - minVy),
-                    lifetime
-                ));
-            }
-        }
-
-        // --- NEW: Background Element Classes ---
-
-        class Firefly {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.size = 2 + Math.random() * 2; // Size 2-4
-                this.baseAlpha = 0.5 + Math.random() * 0.5; // Base transparency
-                this.alpha = 0.1; // Current transparency for blinking
-                this.flickerSpeed = 0.05 + Math.random() * 0.2;
-                this.flickerOffset = Math.random() * Math.PI * 2;
-                this.vx = (Math.random() - 0.5) * 0.5; // Slow horizontal drift
-                this.vy = (Math.random() - 0.5) * 0.5; // Slow vertical drift
-                this.maxSpeed = 1.0;
-                this.color = `rgba(255, 255, 100, 1)`; // Yellowish
-            }
-
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-
-                // Randomly change direction
-                if (Math.random() < 0.02) {
-                    this.vx = (Math.random() - 0.5) * this.maxSpeed;
-                    this.vy = (Math.random() - 0.5) * this.maxSpeed;
-                }
-
-                // Blink effect
-                this.alpha = this.baseAlpha * (0.5 + 0.5 * Math.sin(Date.now() * this.flickerSpeed + this.flickerOffset));
-
-                // Wrap around screen
-                if (this.x < -this.size) this.x = TARGET_CANVAS_WIDTH + this.size;
-                if (this.x > TARGET_CANVAS_WIDTH + this.size) this.x = -this.size;
-                if (this.y < -this.size) this.y = TARGET_CANVAS_HEIGHT + this.size;
-                if (this.y > TARGET_CANVAS_HEIGHT + this.size) this.y = -this.size;
-            }
-
-            draw(ctx) {
-                ctx.save();
-                ctx.globalAlpha = this.alpha;
-                ctx.fillStyle = this.color;
+        draw(ctx) {
+            ctx.save();
+            ctx.globalAlpha = this.alpha;
+            ctx.fillStyle = this.color;
+            if (this.type === 'sparkle') {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.restore();
-            }
-        }
-
-        class Raindrop {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.speed = 5 + Math.random() * 10;
-                this.length = 10 + Math.random() * 10;
-                this.width = 1 + Math.random() * 1;
-                this.color = `rgba(173, 216, 230, ${0.3 + Math.random() * 0.4})`; // Light blue, semi-transparent
-            }
-
-            update() {
-                this.y += this.speed;
-                this.x += 1; // Slight horizontal drift
-                if (this.y > TARGET_CANVAS_HEIGHT + this.length) {
-                    this.y = -this.length;
-                    this.x = Math.random() * TARGET_CANVAS_WIDTH; // Reset horizontal position too
-                }
-                 if (this.x > TARGET_CANVAS_WIDTH) {
-                    this.x = 0;
-                }
-            }
-
-            draw(ctx) {
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.length);
-            }
-        }
-
-        class Snowflake {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.radius = 1 + Math.random() * 2;
-                this.speed = 0.5 + Math.random() * 1.5;
-                this.drift = (Math.random() - 0.5) * 1; // Horizontal drift speed
-                this.angle = Math.random() * Math.PI * 2; // For sinusoidal drift
-                this.color = `rgba(255, 255, 255, ${0.5 + Math.random() * 0.5})`; // White, semi-transparent
-            }
-
-            update() {
-                this.y += this.speed;
-                this.x += this.drift + Math.sin(this.angle) * 0.5;
-                this.angle += 0.01; // Change angle for wavy motion
-
-                if (this.y > TARGET_CANVAS_HEIGHT + this.radius) {
-                    this.y = -this.radius;
-                    this.x = Math.random() * TARGET_CANVAS_WIDTH;
-                }
-                if (this.x < -this.radius || this.x > TARGET_CANVAS_WIDTH + this.radius) {
-                    this.x = Math.random() * TARGET_CANVAS_WIDTH;
-                }
-            }
-
-            draw(ctx) {
-                ctx.fillStyle = this.color;
+            } else if (this.type === 'dust' || this.type === 'jump_puff') {
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
+            } else if (this.type === 'hit_splatter') {
+                ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+            }
+            ctx.restore();
+        }
+    }
+
+    function emitParticles(x, y, type) {
+        let numParticles = 0;
+        let color = '';
+        let minSize = 0;
+        let maxSize = 0;
+        let minVx = -2;
+        let maxVx = 2;
+        let minVy = -3;
+        let maxVy = -1;
+        let lifetime = 30; // Base lifetime, scaled by gameSpeedFactor
+
+        switch (type) {
+            case 'sparkle':
+                numParticles = 5 + Math.random() * 5;
+                color = 'yellow';
+                minSize = 3; maxSize = 6;
+                minVx = -2; maxVx = 2;
+                minVy = -2; maxVy = 2; 
+                lifetime = Math.floor(40 / gameSpeedFactor);
+                break;
+            case 'dust':
+                numParticles = 3 + Math.random() * 3;
+                color = 'grey';
+                minSize = 4; maxSize = 8;
+                minVx = -1; maxVx = 1;
+                minVy = -1; maxVy = -0.5;
+                lifetime = Math.floor(20 / gameSpeedFactor);
+                break;
+            case 'jump_puff':
+                numParticles = 5 + Math.random() * 5;
+                color = 'lightblue';
+                minSize = 5; maxSize = 10;
+                minVx = -1; maxVx = 1;
+                minVy = 1; maxVy = 3; 
+                lifetime = Math.floor(25 / gameSpeedFactor);
+                break;
+            case 'hit_splatter':
+                numParticles = 8 + Math.random() * 7;
+                color = 'red';
+                minSize = 4; maxSize = 10;
+                minVx = -3; maxVx = 3;
+                minVy = -4; maxVy = 0;
+                lifetime = Math.floor(30 / gameSpeedFactor);
+                break;
+        }
+
+        for (let i = 0; i < numParticles; i++) {
+            particles.push(new Particle(
+                x + (Math.random() - 0.5) * 5,
+                y + (Math.random() - 0.5) * 5,
+                type,
+                color,
+                minSize + Math.random() * (maxSize - minSize),
+                minVx + Math.random() * (maxVx - minVx),
+                minVy + Math.random() * (maxVy - minVy),
+                lifetime
+            ));
+        }
+    }
+
+    // --- NEW: Background Element Classes ---
+
+    class Firefly {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.size = 2 + Math.random() * 2; // Size 2-4
+            this.baseAlpha = 0.5 + Math.random() * 0.5; // Base transparency
+            this.alpha = 0; // Current transparency for blinking
+            this.flickerSpeed = 0.05 + Math.random() * 0.05;
+            this.flickerOffset = Math.random() * Math.PI * 2;
+            this.vx = (Math.random() - 0.5) * 0.5; // Slow horizontal drift
+            this.vy = (Math.random() - 0.5) * 0.5; // Slow vertical drift
+            this.maxSpeed = 1.0;
+            this.color = `rgba(255, 255, 100, 1)`; // Yellowish
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // Randomly change direction
+            if (Math.random() < 0.02) {
+                this.vx = (Math.random() - 0.5) * this.maxSpeed;
+                this.vy = (Math.random() - 0.5) * this.maxSpeed;
+            }
+
+            // Blink effect
+            this.alpha = this.baseAlpha * (0.5 + 0.5 * Math.sin(Date.now() * this.flickerSpeed + this.flickerOffset));
+
+            // Wrap around screen
+            if (this.x < -this.size) this.x = TARGET_CANVAS_WIDTH + this.size;
+            if (this.x > TARGET_CANVAS_WIDTH + this.size) this.x = -this.size;
+            if (this.y < -this.size) this.y = TARGET_CANVAS_HEIGHT + this.size;
+            if (this.y > TARGET_CANVAS_HEIGHT + this.size) this.y = -this.size;
+        }
+
+        draw(ctx) {
+            ctx.save();
+            ctx.globalAlpha = this.alpha;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    class Raindrop {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.speed = 5 + Math.random() * 10;
+            this.length = 10 + Math.random() * 10;
+            this.width = 1 + Math.random() * 1;
+            this.color = `rgba(173, 216, 230, ${0.3 + Math.random() * 0.4})`; // Light blue, semi-transparent
+        }
+
+        update() {
+            this.y += this.speed;
+            this.x += 1; // Slight horizontal drift
+            if (this.y > TARGET_CANVAS_HEIGHT + this.length) {
+                this.y = -this.length;
+                this.x = Math.random() * TARGET_CANVAS_WIDTH; // Reset horizontal position too
+            }
+             if (this.x > TARGET_CANVAS_WIDTH) {
+                this.x = 0;
             }
         }
 
-        class Leaf {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.size = 10 + Math.random() * 10;
-                this.speed = 1 + Math.random() * 2;
+        draw(ctx) {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.length);
+        }
+    }
+
+    class Snowflake {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.radius = 1 + Math.random() * 2;
+            this.speed = 0.5 + Math.random() * 1.5;
+            this.drift = (Math.random() - 0.5) * 1; // Horizontal drift speed
+            this.angle = Math.random() * Math.PI * 2; // For sinusoidal drift
+            this.color = `rgba(255, 255, 255, ${0.5 + Math.random() * 0.5})`; // White, semi-transparent
+        }
+
+        update() {
+            this.y += this.speed;
+            this.x += this.drift + Math.sin(this.angle) * 0.5;
+            this.angle += 0.01; // Change angle for wavy motion
+
+            if (this.y > TARGET_CANVAS_HEIGHT + this.radius) {
+                this.y = -this.radius;
+                this.x = Math.random() * TARGET_CANVAS_WIDTH;
+            }
+            if (this.x < -this.radius || this.x > TARGET_CANVAS_WIDTH + this.radius) {
+                this.x = Math.random() * TARGET_CANVAS_WIDTH;
+            }
+        }
+
+        draw(ctx) {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    class Leaf {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.size = 10 + Math.random() * 10;
+            this.speed = 1 + Math.random() * 2;
+            this.rotation = Math.random() * Math.PI * 2;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+            this.drift = (Math.random() - 0.5) * 1; // Horizontal drift
+            this.color = `rgba(${Math.floor(100 + Math.random() * 155)}, ${Math.floor(50 + Math.random() * 100)}, ${Math.floor(0 + Math.random() * 50)}, ${0.6 + Math.random() * 0.3})`; // Autumn colors: orange, red, brown
+        }
+
+        update() {
+            this.y += this.speed;
+            this.x += this.drift;
+            this.rotation += this.rotationSpeed;
+
+            if (this.y > TARGET_CANVAS_HEIGHT + this.size) {
+                this.y = -this.size;
+                this.x = Math.random() * TARGET_CANVAS_WIDTH;
                 this.rotation = Math.random() * Math.PI * 2;
-                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
-                this.drift = (Math.random() - 0.5) * 1; // Horizontal drift
-                this.color = `rgba(${Math.floor(100 + Math.random() * 155)}, ${Math.floor(50 + Math.random() * 100)}, ${Math.floor(0 + Math.random() * 50)}, ${0.6 + Math.random() * 0.3})`; // Autumn colors: orange, red, brown
             }
-
-            update() {
-                this.y += this.speed;
-                this.x += this.drift;
-                this.rotation += this.rotationSpeed;
-
-                if (this.y > TARGET_CANVAS_HEIGHT + this.size) {
-                    this.y = -this.size;
-                    this.x = Math.random() * TARGET_CANVAS_WIDTH;
-                    this.rotation = Math.random() * Math.PI * 2;
-                }
-                if (this.x < -this.size || this.x > TARGET_CANVAS_WIDTH + this.size) {
-                    this.x = Math.random() * TARGET_CANVAS_WIDTH;
-                    this.y = -this.size; // Reset Y to top if drifted off horizontally
-                }
-            }
-
-            draw(ctx) {
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.rotation);
-                ctx.fillStyle = this.color;
-                // Simple leaf shape (rotated rectangle)
-                ctx.fillRect(-this.size / 2, -this.size / 4, this.size, this.size / 2);
-                ctx.restore();
+            if (this.x < -this.size || this.x > TARGET_CANVAS_WIDTH + this.size) {
+                this.x = Math.random() * TARGET_CANVAS_WIDTH;
+                this.y = -this.size; // Reset Y to top if drifted off horizontally
             }
         }
 
-        class FlowerPetal {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.radius = 5 + Math.random() * 5;
-                this.speed = 1 + Math.random() * 2;
+        draw(ctx) {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+            ctx.fillStyle = this.color;
+            // Simple leaf shape (rotated rectangle)
+            ctx.fillRect(-this.size / 2, -this.size / 4, this.size, this.size / 2);
+            ctx.restore();
+        }
+    }
+
+    class FlowerPetal {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.radius = 5 + Math.random() * 5;
+            this.speed = 1 + Math.random() * 2;
+            this.rotation = Math.random() * Math.PI * 2;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+            this.drift = (Math.random() - 0.5) * 0.8; // Horizontal drift
+            const colors = ['rgba(255, 192, 203, 0.7)', 'rgba(255, 223, 0, 0.7)', 'rgba(255, 99, 71, 0.7)', 'rgba(255, 160, 122, 0.7)']; // Pink, yellow, tomato, peach
+            this.color = colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        update() {
+            this.y += this.speed;
+            this.x += this.drift;
+            this.rotation += this.rotationSpeed;
+
+            if (this.y > TARGET_CANVAS_HEIGHT + this.radius) {
+                this.y = -this.radius;
+                this.x = Math.random() * TARGET_CANVAS_WIDTH;
                 this.rotation = Math.random() * Math.PI * 2;
-                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
-                this.drift = (Math.random() - 0.5) * 0.8; // Horizontal drift
-                const colors = ['rgba(255, 192, 203, 0.7)', 'rgba(255, 223, 0, 0.7)', 'rgba(255, 99, 71, 0.7)', 'rgba(255, 160, 122, 0.7)']; // Pink, yellow, tomato, peach
-                this.color = colors[Math.floor(Math.random() * colors.length)];
             }
-
-            update() {
-                this.y += this.speed;
-                this.x += this.drift;
-                this.rotation += this.rotationSpeed;
-
-                if (this.y > TARGET_CANVAS_HEIGHT + this.radius) {
-                    this.y = -this.radius;
-                    this.x = Math.random() * TARGET_CANVAS_WIDTH;
-                    this.rotation = Math.random() * Math.PI * 2;
-                }
-                if (this.x < -this.radius || this.x > TARGET_CANVAS_WIDTH + this.radius) {
-                    this.x = Math.random() * TARGET_CANVAS_WIDTH;
-                    this.y = -this.radius;
-                }
-            }
-
-            draw(ctx) {
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.rotation);
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.ellipse(0, 0, this.radius, this.radius * 1.5, 0, 0, Math.PI * 2); // Oval shape for petal
-                ctx.fill();
-                ctx.restore();
+            if (this.x < -this.radius || this.x > TARGET_CANVAS_WIDTH + this.radius) {
+                this.x = Math.random() * TARGET_CANVAS_WIDTH;
+                this.y = -this.radius;
             }
         }
 
-        // --- Power-up Class ---
-        class PowerUp {
-            constructor(x, y, type) {
-                this.x = x;
-                this.y = y;
-                this.type = type; 
-                this.radius = 12;
-                this.collected = false;
-                this.scale = 1;
-                this.color1 = '';
-                this.color2 = '';
-                this.symbol = ''; // Replaced emojis with text
-                this.animationTimer = 0; 
-                this.animationSpeed = 0.05 * gameSpeedFactor; // Scale animation speed
-
-                switch (this.type) {
-                    case 'invincible':
-                        this.color1 = '#FFD700'; 
-                        this.color2 = '#FFA500'; 
-                        this.symbol = 'INV'; // Emojis replaced
-                        break;
-                    case 'speed':
-                        this.color1 = '#00FF00'; 
-                        this.color2 = '#008000'; 
-                        this.symbol = 'SPD'; // Emojis replaced
-                        break;
-                }
-            }
-
-            draw(ctx) {
-                if (this.collected) return;
-
-                const offsetY = Math.sin(this.animationTimer) * 5; 
-                drawCircleWithGradient(this.x, this.y + offsetY, this.radius, this.color1, this.color2, this.scale);
-
-                ctx.fillStyle = 'white';
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = 2;
-                ctx.font = 'bold 12px Arial'; // Adjusted font size to fit text
-                ctx.textAlign = 'center';
-                ctx.strokeText(this.symbol, this.x, this.y + offsetY + 4); // Adjusted Y for text baseline
-                ctx.fillText(this.symbol, this.x, this.y + offsetY + 4);
-            }
-
-            update() {
-                this.animationTimer += this.animationSpeed;
-            }
-        }
-
-        // --- Drawing Helpers ---
-        function drawCircleWithGradient(x, y, radius, color1, color2, scale = 1) {
+        draw(ctx) {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+            ctx.fillStyle = this.color;
             ctx.beginPath();
-            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * scale);
-            gradient.addColorStop(0, color1);
-            gradient.addColorStop(1, color2);
-            ctx.fillStyle = gradient;
-            ctx.arc(x, y, radius * scale, 0, Math.PI * 2);
+            ctx.ellipse(0, 0, this.radius, this.radius * 1.5, 0, 0, Math.PI * 2); // Oval shape for petal
             ctx.fill();
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            ctx.restore();
         }
-        
-        function drawRectWithGradient(x, y, width, height, color1, color2) {
-            const centerX = x + width / 2;
-            const centerY = y + height / 2;
-            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, width / 2);
-            gradient.addColorStop(0, color1);
-            gradient.addColorStop(1, color2);
-            ctx.fillStyle = gradient;
-            ctx.fillRect(x, y, width, height);
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x, y, width, height);
-        }
-        
-        function drawTriangleWithGradient(x, y, size, color1, color2) {
-            ctx.beginPath();
-            ctx.moveTo(x, y - size);
-            ctx.lineTo(x - size, y + size);
-            ctx.lineTo(x + size, y + size);
-            ctx.closePath();
-            
-            const centerX = x;
-            const centerY = y;
-            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size);
-            gradient.addColorStop(0, color1);
-            gradient.addColorStop(1, color2);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-        
-        function drawStarWithGradient(x, y, radius, spikes, color1, color2, scale = 1) {
-            let rot = Math.PI / 2 * 3;
-            let cx = x;
-            let cy = y;
-            let step = Math.PI / spikes;
-            
-            ctx.beginPath();
-            ctx.moveTo(cx + Math.cos(rot) * radius * scale, cy + Math.sin(rot) * radius * scale);
-            
-            for (let i = 0; i < spikes; i++) {
-                rot += step;
-                let x = cx + Math.cos(rot) * radius * scale * 0.4;
-                let y = cy + Math.sin(rot) * radius * scale * 0.4;
-                ctx.lineTo(x, y);
-                rot += step;
-                x = cx + Math.cos(rot) * radius * scale;
-                y = cy + Math.sin(rot) * radius * scale;
-                ctx.lineTo(x, y);
-            }
-            ctx.closePath();
-            
-            const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * scale);
-            gradient.addColorStop(0, color1);
-            gradient.addColorStop(1, color2);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-        
-        function generateBackgroundColors() {
-            backgroundColors = [];
-            switch (level % 5) {
-                case 1: // Night/Space
-                    backgroundColors = ['#0a1a40', '#4a4969', '#8c7e9c']; //8C7E9C 7f7f9c
+    }
+
+    // --- Power-up Class ---
+    class PowerUp {
+        constructor(x, y, type) {
+            this.x = x;
+            this.y = y;
+            this.type = type; 
+            this.radius = 12;
+            this.collected = false;
+            this.scale = 1;
+            this.color1 = '';
+            this.color2 = '';
+            this.symbol = ''; // Replaced emojis with text
+            this.animationTimer = 0; 
+            this.animationSpeed = 0.05 * gameSpeedFactor; // Scale animation speed
+
+            switch (this.type) {
+                case 'invincible':
+                    this.color1 = '#FFD700'; 
+                    this.color2 = '#FFA500'; 
+                    this.symbol = 'INV'; // Emojis replaced
                     break;
-                case 2: // Autumn/Sunset
-                    backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];
-                    break;
-                case 3: // Sky/Ocean
-                    backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6'];
-                    break;
-                case 4: // Winter/Deep Night
-                    backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
-                    break;
-                case 0: // Spring/Sunrise
-                    backgroundColors = ['#ff9966', '#ff5e62', '#c84e89'];
+                case 'speed':
+                    this.color1 = '#00FF00'; 
+                    this.color2 = '#008000'; 
+                    this.symbol = 'SPD'; // Emojis replaced
                     break;
             }
         }
 
-        // NEW: Function to set up background moving elements
-        function setupLevelBackgroundEffects() {
-            backgroundParticles = [];
-            const baseNumParticles = Math.floor(TARGET_CANVAS_WIDTH * TARGET_CANVAS_HEIGHT / 15000); // Adjust density as needed
+        draw(ctx) {
+            if (this.collected) return;
 
-            switch (level % 5) {
-                case 1: // Night/Space -> Fireflies
-                    for (let i = 0; i < baseNumParticles / 2; i++) { // Fewer fireflies, more noticeable
-                        backgroundParticles.push(new Firefly(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
-                    }
-                    break;
-                case 2: // Autumn/Sunset -> Leaves
-                    for (let i = 0; i < baseNumParticles; i++) {
-                        backgroundParticles.push(new Leaf(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
-                    }
-                    break;
-                case 3: // Sky/Ocean -> Rain
-                    for (let i = 0; i < baseNumParticles * 2; i++) { // More rain for a visible effect
-                        backgroundParticles.push(new Raindrop(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
-                    }
-                    break;
-                case 4: // Winter/Deep Night -> Snow
-                    for (let i = 0; i < baseNumParticles * 1.5; i++) { // Medium density snow
-                        backgroundParticles.push(new Snowflake(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
-                    }
-                    break;
-                case 0: // Spring/Sunrise -> Flower Petals
-                    for (let i = 0; i < baseNumParticles; i++) {
-                        backgroundParticles.push(new FlowerPetal(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
-                    }
-                    break;
-            }
+            const offsetY = Math.sin(this.animationTimer) * 5; 
+            drawCircleWithGradient(this.x, this.y + offsetY, this.radius, this.color1, this.color2, this.scale);
+
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.font = 'bold 12px Arial'; // Adjusted font size to fit text
+            ctx.textAlign = 'center';
+            ctx.strokeText(this.symbol, this.x, this.y + offsetY + 4); // Adjusted Y for text baseline
+            ctx.fillText(this.symbol, this.x, this.y + offsetY + 4);
         }
+
+        update() {
+            this.animationTimer += this.animationSpeed;
+        }
+    }
+
+    // --- Drawing Helpers ---
+    function drawCircleWithGradient(x, y, radius, color1, color2, scale = 1) {
+        ctx.beginPath();
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * scale);
+        gradient.addColorStop(0, color1);
+        gradient.addColorStop(1, color2);
+        ctx.fillStyle = gradient;
+        ctx.arc(x, y, radius * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    
+    function drawRectWithGradient(x, y, width, height, color1, color2) {
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
+        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, width / 2);
+        gradient.addColorStop(0, color1);
+        gradient.addColorStop(1, color2);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+    }
+    
+    function drawTriangleWithGradient(x, y, size, color1, color2) {
+        ctx.beginPath();
+        ctx.moveTo(x, y - size);
+        ctx.lineTo(x - size, y + size);
+        ctx.lineTo(x + size, y + size);
+        ctx.closePath();
         
-        function initLevel() {
-            platforms = [];
-            enemies = [];
-            stars = [];
-            powerUps = [];
-            particles = []; 
-            exitPlatform = null; // Ensures exit platform is hidden at start of new level
-            generateBackgroundColors();
-            setupLevelBackgroundEffects(); // NEW: Call to set up background elements
-            
-            // Green starting platform
-            platforms.push({
-                x: 20,
-                y: 85, // Fixed Y for consistent start (relatively high)
-                width: 125,
-                height: 20,
-                color1: '#006400', 
-                color2: '#004d00', 
-                static: true,
-                type: 'normal',
-                active: true
-            });
+        const centerX = x;
+        const centerY = y;
+        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size);
+        gradient.addColorStop(0, color1);
+        gradient.addColorStop(1, color2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    
+    function drawStarWithGradient(x, y, radius, spikes, color1, color2, scale = 1) {
+        let rot = Math.PI / 2 * 3;
+        let cx = x;
+        let cy = y;
+        let step = Math.PI / spikes;
+        
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(rot) * radius * scale, cy + Math.sin(rot) * radius * scale);
+        
+        for (let i = 0; i < spikes; i++) {
+            rot += step;
+            let x = cx + Math.cos(rot) * radius * scale * 0.4;
+            let y = cy + Math.sin(rot) * radius * scale * 0.4;
+            ctx.lineTo(x, y);
+            rot += step;
+            x = cx + Math.cos(rot) * radius * scale;
+            y = cy + Math.sin(rot) * radius * scale;
+            ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        
+        const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * scale);
+        gradient.addColorStop(0, color1);
+        gradient.addColorStop(1, color2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    
+    function generateBackgroundColors() {
+        backgroundColors = [];
+        switch (level % 5) {
+            case 1: // Night/Space
+                backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c'];
+                break;
+            case 2: // Autumn/Sunset
+                backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];
+                break;
+            case 3: // Sky/Ocean
+                backgroundColors = ['#36d1dc', '#5b86e5', '#3494e6'];
+                break;
+            case 4: // Winter/Deep Night
+                backgroundColors = ['#141e30', '#243b55', '#1a2a3a'];
+                break;
+            case 0: // Spring/Sunrise
+                backgroundColors = ['#ff9966', '#ff5e62', '#c84e89'];
+                break;
+        }
+    }
 
-            // Deadly bottom platform
-            platforms.push({
-                x: 0, y: TARGET_CANVAS_HEIGHT - DEADLY_PLATFORM_HEIGHT, width: TARGET_CANVAS_WIDTH, height: DEADLY_PLATFORM_HEIGHT,
-                color1: '#8B0000', color2: '#660000', static: true, deadly: true, type: 'normal'
-            });
+    // NEW: Function to set up background moving elements
+    function setupLevelBackgroundEffects() {
+        backgroundParticles = [];
+        const baseNumParticles = Math.floor(TARGET_CANVAS_WIDTH * TARGET_CANVAS_HEIGHT / 15000); // Adjust density as needed
 
-            // Define the vertical range for dynamic platforms
-            const highestPlatformBottomY = platforms[0].y + platforms[0].height; // Bottom of starting platform
-            // Lowest Y a dynamic platform's TOP can be (above the exit platform and respecting min gap)
-            const lowestPlatformTopY = EFFECTIVE_EXIT_PLATFORM_Y - MIN_PLATFORM_VERTICAL_GAP - 15; // 15 is platform height
-
-            let numDynamicPlatforms = 5 + Math.floor(Math.random() * 4) + Math.min(level, 5);
-            // Cap number of platforms to ensure they fit within jump height constraints and min gaps
-            const availableVerticalSpaceForDynamic = lowestPlatformTopY - highestPlatformBottomY;
-            numDynamicPlatforms = Math.min(numDynamicPlatforms, Math.floor(availableVerticalSpaceForDynamic / (MIN_PLATFORM_VERTICAL_GAP + 15))); // 15 is platform height
-            numDynamicPlatforms = Math.max(numDynamicPlatforms, 3); // Ensure at least 3 dynamic platforms
-
-            let currentPlatformYForGeneration = highestPlatformBottomY; // Start placing above initial platform
-
-            let dynamicPlatformConfigs = []; // Collect configs then add them to platforms array
-            let specialPlatformsToGenerate = [];
-
-            if (level === 1) { /* No special platforms in Level 1 */ }
-            else if (level >= 2 && level <= 4) {
-                const typeToIntroduce = SPECIAL_PLATFORM_TYPES[level - 2];
-                specialPlatformsToGenerate.push(typeToIntroduce);
-            } else if (level >= 5) {
-                specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
-                specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
-            }
-
-            for (let i = 0; i < numDynamicPlatforms; i++) {
-                let currentType = 'normal';
-                let pColor1 = '#00008B';
-                let pColor2 = '#000066';
-                let platformSpeedFactor = (1.0 + Math.random() * 0.5);
-                let isStatic = false;
-                let direction = Math.random() > 0.5 ? 1 : -1;
-
-                if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.4) {
-                    currentType = specialPlatformsToGenerate.shift();
-                    switch (currentType) {
-                        case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
-                        case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
-                        case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; break;
-                    }
+        switch (level % 5) {
+            case 1: // Night/Space -> Fireflies
+                for (let i = 0; i < baseNumParticles / 2; i++) { // Fewer fireflies, more noticeable
+                    backgroundParticles.push(new Firefly(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
                 }
-
-                const width = 70 + Math.random() * 150;
-                const height = 15;
-
-                // Calculate Y based on minimum and maximum jump height constraints
-                let minYForThisPlatform = currentPlatformYForGeneration + MIN_PLATFORM_VERTICAL_GAP;
-                let maxYForThisPlatform = currentPlatformYForGeneration + MAX_PLATFORM_VERTICAL_GAP; // Max gap constraint applied here
-
-                // Ensure platform does not go below the lowest allowed position (above the exit platform)
-                maxYForThisPlatform = Math.min(maxYForThisPlatform, lowestPlatformTopY - height);
-
-                // Fallback if no valid range for Y (can happen if space is too constrained)
-                if (minYForThisPlatform > maxYForThisPlatform) {
-                    minYForThisPlatform = maxYForThisPlatform; // Clamp to the max possible
-                    if (minYForThisPlatform < currentPlatformYForGeneration + height) { // Ensure at least a platform's height gap
-                        minYForThisPlatform = currentPlatformYForGeneration + height;
-                    }
+                break;
+            case 2: // Autumn/Sunset -> Leaves
+                for (let i = 0; i < baseNumParticles; i++) {
+                    backgroundParticles.push(new Leaf(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
                 }
-                
-                let y = Math.random() * (maxYForThisPlatform - minYForThisPlatform) + minYForThisPlatform;
-                // Ensure it's not above the area where the first platform ends + min gap
-                y = Math.max(y, highestPlatformBottomY + MIN_PLATFORM_VERTICAL_GAP);
+                break;
+            case 3: // Sky/Ocean -> Rain
+                for (let i = 0; i < baseNumParticles * 2; i++) { // More rain for a visible effect
+                    backgroundParticles.push(new Raindrop(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
+                }
+                break;
+            case 4: // Winter/Deep Night -> Snow
+                for (let i = 0; i < baseNumParticles * 1.5; i++) { // Medium density snow
+                    backgroundParticles.push(new Snowflake(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
+                }
+                break;
+            case 0: // Spring/Sunrise -> Flower Petals
+                for (let i = 0; i < baseNumParticles; i++) {
+                    backgroundParticles.push(new FlowerPetal(Math.random() * TARGET_CANVAS_WIDTH, Math.random() * TARGET_CANVAS_HEIGHT));
+                }
+                break;
+        }
+    }
+    
+    function initLevel() {
+        platforms = [];
+        enemies = [];
+        stars = [];
+        powerUps = [];
+        particles = []; 
+        exitPlatform = null; // Ensures exit platform is hidden at start of new level
+        generateBackgroundColors();
+        setupLevelBackgroundEffects(); // NEW: Call to set up background elements
+        
+        // Green starting platform
+        platforms.push({
+            x: 20,
+            y: 125, // Fixed Y for consistent start (relatively high)
+            width: 100,
+            height: 20,
+            color1: '#006400', 
+            color2: '#004d00', 
+            static: true,
+            type: 'normal',
+            active: true
+        });
 
-                const x = Math.random() * (TARGET_CANVAS_WIDTH - width);
+        // Deadly bottom platform
+        platforms.push({
+            x: 0, y: TARGET_CANVAS_HEIGHT - DEADLY_PLATFORM_HEIGHT, width: TARGET_CANVAS_WIDTH, height: DEADLY_PLATFORM_HEIGHT,
+            color1: '#8B0000', color2: '#660000', static: true, deadly: true, type: 'normal'
+        });
 
-                dynamicPlatformConfigs.push({
-                    x, y, width, height, color1: pColor1, color2: pColor2,
-                    static: isStatic, direction, speed: platformBaseSpeed * platformSpeedFactor * gameSpeedFactor,
-                    type: currentType, originalColor1: pColor1, originalColor2: pColor2,
-                    active: true, timer: Math.floor(60 / gameSpeedFactor), reappearTime: Math.floor(120 / gameSpeedFactor)
-                });
-                currentPlatformYForGeneration = y + height;
-            }
+        // Define the vertical range for dynamic platforms
+        const highestPlatformBottomY = platforms[0].y + platforms[0].height; // Bottom of starting platform
+        // Lowest Y a dynamic platform's TOP can be (above the exit platform and respecting min gap)
+        const lowestPlatformTopY = EFFECTIVE_EXIT_PLATFORM_Y - MIN_PLATFORM_VERTICAL_GAP - 15; // 15 is platform height
 
-            // Add remaining special platforms if they weren't all used due to random chance
-            while (specialPlatformsToGenerate.length > 0) {
-                const currentType = specialPlatformsToGenerate.shift();
-                let pColor1 = '#00008B'; let pColor2 = '#000066';
-                let platformSpeedFactor = (1.0 + Math.random() * 0.5); let isStatic = false;
-                
+        let numDynamicPlatforms = 5 + Math.floor(Math.random() * 4) + Math.min(level, 5);
+        // Cap number of platforms to ensure they fit within jump height constraints and min gaps
+        const availableVerticalSpaceForDynamic = lowestPlatformTopY - highestPlatformBottomY;
+        numDynamicPlatforms = Math.min(numDynamicPlatforms, Math.floor(availableVerticalSpaceForDynamic / (MIN_PLATFORM_VERTICAL_GAP + 15))); // 15 is platform height
+        numDynamicPlatforms = Math.max(numDynamicPlatforms, 3); // Ensure at least 3 dynamic platforms
+
+        let currentPlatformYForGeneration = highestPlatformBottomY; // Start placing above initial platform
+
+        let dynamicPlatformConfigs = []; // Collect configs then add them to platforms array
+        let specialPlatformsToGenerate = [];
+
+        if (level === 1) { /* No special platforms in Level 1 */ }
+        else if (level >= 2 && level <= 4) {
+            const typeToIntroduce = SPECIAL_PLATFORM_TYPES[level - 2];
+            specialPlatformsToGenerate.push(typeToIntroduce);
+        } else if (level >= 5) {
+            specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
+            specialPlatformsToGenerate.push(SPECIAL_PLATFORM_TYPES[Math.floor(Math.random() * SPECIAL_PLATFORM_TYPES.length)]);
+        }
+
+        for (let i = 0; i < numDynamicPlatforms; i++) {
+            let currentType = 'normal';
+            let pColor1 = '#00008B';
+            let pColor2 = '#000066';
+            let platformSpeedFactor = (1.0 + Math.random() * 0.5);
+            let isStatic = false;
+            let direction = Math.random() > 0.5 ? 1 : -1;
+
+            if (specialPlatformsToGenerate.length > 0 && Math.random() < 0.4) {
+                currentType = specialPlatformsToGenerate.shift();
                 switch (currentType) {
                     case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
                     case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
                     case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; break;
                 }
-
-                const width = 70 + Math.random() * 150;
-                const height = 15;
-
-                let minYForThisPlatform = currentPlatformYForGeneration + MIN_PLATFORM_VERTICAL_GAP;
-                let maxYForThisPlatform = currentPlatformYForGeneration + MAX_PLATFORM_VERTICAL_GAP; // Max gap constraint applied here
-                maxYForThisPlatform = Math.min(maxYForThisPlatform, lowestPlatformTopY - height);
-
-                if (minYForThisPlatform > maxYForThisPlatform) {
-                    minYForThisPlatform = maxYForThisPlatform;
-                    if (minYForThisPlatform < currentPlatformYForGeneration + height) {
-                        minYForThisPlatform = currentPlatformYForGeneration + height;
-                    }
-                }
-                let y = Math.random() * (maxYForThisPlatform - minYForThisPlatform) + minYForThisPlatform;
-                y = Math.max(y, highestPlatformBottomY + MIN_PLATFORM_VERTICAL_GAP);
-
-                const x = Math.random() * (TARGET_CANVAS_WIDTH - width);
-
-                dynamicPlatformConfigs.push({
-                    x, y, width, height, color1: pColor1, color2: pColor2,
-                    static: isStatic, direction: Math.random() > 0.5 ? 1 : -1,
-                    speed: platformBaseSpeed * platformSpeedFactor * gameSpeedFactor,
-                    type: currentType, originalColor1: pColor1, originalColor2: pColor2, active: true,
-                    timer: Math.floor(60 / gameSpeedFactor), reappearTime: Math.floor(120 / gameSpeedFactor)
-                });
-                currentPlatformYForGeneration = y + height;
             }
 
-            // Sort platforms by Y and insert them before the deadly platform
-            dynamicPlatformConfigs.sort((a, b) => a.y - b.y);
-            platforms.splice(platforms.length - 1, 0, ...dynamicPlatformConfigs);
+            const width = 70 + Math.random() * 150;
+            const height = 15;
 
-            // Find the lowest moving platform's bottom Y coordinate for star placement constraint
-            let lowestMovingPlatformBottomY = 0;
-            for (const p of platforms) {
-                // Only consider platforms that are actually moving and not special types that might imply being stationary/disappearing
-                if (!p.static && p.type !== 'disappearing' && p.type !== 'bouncy') {
-                    lowestMovingPlatformBottomY = Math.max(lowestMovingPlatformBottomY, p.y + p.height);
-                }
-            }
-            // If no moving platforms (e.g., Level 1 or all static/special), set a safe default (above the exit platform).
-            // This is crucial to prevent stars from spawning below unreachable areas.
-            if (lowestMovingPlatformBottomY === 0 || lowestMovingPlatformBottomY > EFFECTIVE_EXIT_PLATFORM_Y) {
-                lowestMovingPlatformBottomY = EFFECTIVE_EXIT_PLATFORM_Y; 
-            }
+            // Calculate Y based on minimum and maximum jump height constraints
+            let minYForThisPlatform = currentPlatformYForGeneration + MIN_PLATFORM_VERTICAL_GAP;
+            let maxYForThisPlatform = currentPlatformYForGeneration + MAX_PLATFORM_VERTICAL_GAP; // Max gap constraint applied here
 
-            // Populate enemies and power-ups on platforms
-            for (let i = 1; i < platforms.length - 1; i++) { // Exclude first (start) and last (deadly) platforms
-                const platform = platforms[i];
-                if (Math.random() < (0.3 + (level * 0.05)) && platform.type !== 'bouncy') {
-                    enemies.push({
-                        x: platform.x + platform.width / 2, y: platform.y - 15, size: 12,
-                        platformIndex: i, direction: Math.random() > 0.5 ? 1 : -1,
-                        speed: platformBaseSpeed * (0.5 + Math.random() * 0.5) * gameSpeedFactor // Scale enemy speed
-                    });
-                }
-                if (Math.random() < 0.08 && platform.type !== 'bouncy' && platform.type !== 'disappearing') {
-                    const puType = Math.random() < 0.5 ? 'invincible' : 'speed';
-                    powerUps.push(new PowerUp(platform.x + platform.width / 2, platform.y - 20, puType));
+            // Ensure platform does not go below the lowest allowed position (above the exit platform)
+            maxYForThisPlatform = Math.min(maxYForThisPlatform, lowestPlatformTopY - height);
+
+            // Fallback if no valid range for Y (can happen if space is too constrained)
+            if (minYForThisPlatform > maxYForThisPlatform) {
+                minYForThisPlatform = maxYForThisPlatform; // Clamp to the max possible
+                if (minYForThisPlatform < currentPlatformYForGeneration + height) { // Ensure at least a platform's height gap
+                    minYForThisPlatform = currentPlatformYForGeneration + height;
                 }
             }
             
-            // Star Generation (Revised)
-            const starRadius = 15;
-            const numStars = 5 + level;
-            for (let i = 0; i < numStars; i++) {
-                let valid = false;
-                let starX, starY;
-                let attempts = 0;
-                const maxStarPlacementAttempts = 100;
+            let y = Math.random() * (maxYForThisPlatform - minYForThisPlatform) + minYForThisPlatform;
+            // Ensure it's not above the area where the first platform ends + min gap
+            y = Math.max(y, highestPlatformBottomY + MIN_PLATFORM_VERTICAL_GAP);
 
-                while (!valid && attempts < maxStarPlacementAttempts) {
-                    attempts++;
-                    
-                    // Pick a random platform to base the star's Y position on
-                    // Exclude start and deadly platforms from being the primary base for stars
-                    const platformCandidates = platforms.slice(1, platforms.length - 1);
-                    if (platformCandidates.length === 0) { // Fallback, should not happen with proper platform generation
-                        platformCandidates.push(platforms[0]); 
-                    }
-                    const basePlatform = platformCandidates[Math.floor(Math.random() * platformCandidates.length)];
+            const x = Math.random() * (TARGET_CANVAS_WIDTH - width);
 
-                    // Star Y must be within jump height relative to this platform
-                    const starYminRelative = basePlatform.y - MAX_JUMP_HEIGHT;
-                    const starYmaxRelative = basePlatform.y + basePlatform.height + MAX_JUMP_HEIGHT;
-
-                    starX = 20 + Math.random() * (TARGET_CANVAS_WIDTH - 40);
-                    starY = Math.random() * (starYmaxRelative - starYminRelative) + starYminRelative;
-
-                    // Apply global Y constraints for stars
-                    starY = Math.max(starY, player.radius + 10); // Not too high (above player starting Y)
-                    // Ensure stars are above the lowest moving platform's bottom edge, and above the exit platform area.
-                    starY = Math.min(starY, lowestMovingPlatformBottomY - starRadius - 5); 
-                    starY = Math.min(starY, EFFECTIVE_EXIT_PLATFORM_Y - starRadius - 5);
-
-                    // Validate placement (no overlaps)
-                    valid = true;
-                    // Check collision with enemies
-                    for (const enemy of enemies) {
-                        const dx = starX - enemy.x; const dy = starY - enemy.y;
-                        if (Math.sqrt(dx * dx + dy * dy) < starRadius + enemy.size * 0.7) { valid = false; break; }
-                    }
-                    if (!valid) continue;
-                    // Check collision with platforms
-                    for (const platform of platforms) {
-                        if (starX + starRadius > platform.x && starX - starRadius < platform.x + platform.width &&
-                            starY + starRadius > platform.y && starY - starRadius < platform.y + platform.height) {
-                            valid = false;
-                            break;
-                        }
-                    }
-                    if (!valid) continue;
-                    // Check collision with power-ups
-                    for (const pu of powerUps) {
-                        const dx = starX - pu.x; const dy = starY - pu.y;
-                        if (Math.sqrt(dx * dx + dy * dy) < starRadius + pu.radius) { valid = false; break; }
-                    }
-                    if (!valid) continue;
-                    
-                    // Final check: is the star actually reachable from *any* platform?
-                    // This is a crucial check for playability based on current jump height.
-                    let reachableFromAnyPlatform = false;
-                    for (const p of platforms) {
-                        // Rough horizontal check (within player's ability to move)
-                        // A buffer of player.radius * 2 is added to account for player's width when jumping between platforms.
-                        if (starX + player.radius * 2 > p.x && starX - player.radius * 2 < p.x + p.width) {
-                            const verticalDistToTop = p.y - (starY + player.radius); // How far up from star top to platform top
-                            const verticalDistToBottom = (starY - player.radius) - (p.y + p.height); // How far down from star bottom to platform bottom
-
-                            // Can jump up to it OR can fall down to it
-                            if ( (verticalDistToTop >= -player.radius && verticalDistToTop <= MAX_JUMP_HEIGHT + player.radius) || // Jump from platform to star
-                                 (verticalDistToBottom >= -player.radius && verticalDistToBottom <= MAX_JUMP_HEIGHT + player.radius) ) { // Jump from star to platform OR fall from platform to star
-                                reachableFromAnyPlatform = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!reachableFromAnyPlatform) { valid = false; }
-                }
-                if (valid) {
-                    stars.push({ x: starX, y: starY, radius: starRadius, scale: 1, collected: false });
-                }
-            }
-            
-            // Player reset position
-            player.x = 50;
-            player.y = platforms[0].y - player.radius; // Snap directly to platform top
-            player.vx = 0;
-            player.vy = 0; 
-            player.scale = 1;
-            player.onGround = true; 
-            player.canTakeDamage = true;
-            clearTimeout(player.damageCooldownTimeout);
-            player.invincible = false;
-            player.invincibleTimer = 0;
-            player.speedBoost = false;
-            player.speedBoostTimer = 0;
-        }
-        
-        function update() {
-            switch (gameState) {
-                case 'start':
-                    if (keys[' ']) {
-                        playerCanMove = true;
-                        gameState = 'playing';
-                        keys[' '] = false;
-                        startMusic();
-                    }
-                    break;
-                case 'playing':
-                    if (keys['p'] || keys['Escape']) {
-                        gameState = 'paused';
-                        keys['p'] = false; keys['Escape'] = false;
-                        if (bgMusic) bgMusic.pause();
-                        playerCanMove = false;
-                    }
-                    updatePlayer();
-                    updatePlatforms();
-                    updateEnemies();
-                    updateStars();
-                    updatePowerUps(); 
-                    updateParticles(); 
-                    updateBackgroundParticles(); // NEW: Update background particles
-                    checkExitPlatform();
-                    break;
-                case 'paused':
-                    if (keys['p'] || keys['Escape']) {
-                        gameState = 'playing';
-                        keys['p'] = false; keys['Escape'] = false;
-                        if (bgMusic) startMusic();
-                        playerCanMove = true;
-                    }
-                    break;
-                case 'transitioning':
-                    transitionAlpha += transitionSpeed;
-                    if (transitionAlpha >= 1) {
-                        transitionAlpha = 1;
-                        if (transitionCallback) transitionCallback();
-                        transitionSpeed *= -1;
-                    } else if (transitionAlpha <= 0) {
-                        transitionAlpha = 0;
-                        transitionSpeed = Math.abs(transitionSpeed);
-                        gameState = 'playing';
-                        playerCanMove = true;
-                    }
-                    break;
-                case 'gameOver':
-                    if (keys[' ']) {
-                        resetGame();
-                        keys[' '] = false;
-                    }
-                    break;
-            }
-        }
-        
-        function updatePlayer() {
-            if (!playerCanMove) {
-                player.vx = 0;
-                return;
-            }
-
-            let currentSpeed = player.baseSpeed;
-            if (player.speedBoost) {
-                currentSpeed *= 2.0; 
-                player.speedBoostTimer--;
-                if (player.speedBoostTimer <= 0) {
-                    player.speedBoost = false;
-                }
-            }
-
-            if (keys.ArrowLeft) player.vx = Math.max(player.vx - (0.2 * gameSpeedFactor), -currentSpeed);
-            else if (keys.ArrowRight) player.vx = Math.min(player.vx + (0.2 * gameSpeedFactor), currentSpeed);
-            else player.vx *= 0.9;
-            
-            player.x += player.vx;
-            
-            if (keys[' '] && player.onGround) {
-                player.vy = player.baseJump;
-                player.onGround = false;
-                playJumpSound();
-            }
-            
-            player.vy += GRAVITY; // Use scaled GRAVITY
-            player.y += player.vy;
-            
-            if (player.x < player.radius) {
-                player.x = player.radius;
-                player.vx = 0;
-            }
-            if (player.x > TARGET_CANVAS_WIDTH - player.radius) {
-                player.x = TARGET_CANVAS_WIDTH - player.radius;
-                player.vx = 0;
-            }
-            
-            let landedOnPlatformThisFrame = false;
-            for (const platform of platforms) {
-                if (!platform.active) continue; 
-
-                if (player.vy > 0 && 
-                    player.y + player.radius > platform.y && 
-                    player.y - player.radius < platform.y + platform.height &&
-                    player.x + player.radius > platform.x && 
-                    player.x - player.radius < platform.x + platform.width) {
-                    
-                    if (player.y - player.vy + player.radius <= platform.y) { 
-                        player.y = platform.y - player.radius;
-                        
-                        if (!player.onGround) {
-                             if (platform.type === 'bouncy') {
-                                player.vy = player.baseJump * 1.8; 
-                             } else {
-                                player.vy = -player.vy * 0.2; 
-                             }
-                             playLandSound();
-                        } else {
-                            player.vy = 0;
-                        }
-                        player.onGround = true;
-                        landedOnPlatformThisFrame = true;
-                        
-                        if (player.scale === 1) {
-                            player.scale = 0.9;
-                            setTimeout(() => player.scale = 1, Math.floor(100 / gameSpeedFactor)); // Scale animation time
-                        }
-                        
-                        if (!platform.static) {
-                            player.x += platform.direction * platform.speed;
-                        }
-                        if (platform.type === 'conveyor') {
-                             player.x += platform.direction * platform.speed * 1.5; 
-                        }
-
-                        if (platform.type === 'disappearing') {
-                            platform.timer = Math.floor(60 / gameSpeedFactor); 
-                            platform.color1 = 'rgba(128,0,128,0.5)'; 
-                            platform.color2 = 'rgba(75,0,130,0.5)';
-                        }
-                        
-                        if (platform.deadly && !player.invincible && player.canTakeDamage) {
-                            playerDie(true);
-                        }
-                    }
-                }
-            }
-            if (!landedOnPlatformThisFrame && player.onGround && player.vy > 0) {
-                 player.onGround = false;
-            }
-
-            for (const enemy of enemies) {
-                const dx = player.x - enemy.x;
-                const dy = player.y - enemy.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance < player.radius + enemy.size * 0.7 && !player.invincible && player.canTakeDamage) {
-                    playerDie(false);
-                    player.vx = dx > 0 ? 5 * gameSpeedFactor : -5 * gameSpeedFactor;
-                    player.vy = -3 * gameSpeedFactor;
-                }
-            }
-            
-            if (player.y > TARGET_CANVAS_HEIGHT + 50) {
-                if (!player.invincible && player.canTakeDamage) {
-                    playerDie(true);
-                }
-            }
-
-            if (player.invincibleTimer > 0) {
-                player.invincibleTimer--;
-                if (player.invincibleTimer <= 0) {
-                    player.invincible = false;
-                    player.canTakeDamage = true; 
-                    clearTimeout(player.damageCooldownTimeout); 
-                }
-            }
-        }
-        
-        function updatePlatforms() {
-            for (let i = 0; i < platforms.length; i++) {
-                const platform = platforms[i];
-                if (!platform.static) {
-                    platform.x += platform.direction * platform.speed;
-                    
-                    if (platform.x <= 0 || platform.x + platform.width >= TARGET_CANVAS_WIDTH) {
-                        platform.direction *= -1;
-                        if (platform.x < 0) platform.x = 0;
-                        if (platform.x + platform.width > TARGET_CANVAS_WIDTH) platform.x = TARGET_CANVAS_WIDTH - platform.width;
-                    }
-                }
-                if (platform.type === 'disappearing' && platform.timer > 0) {
-                    platform.timer--;
-                    if (platform.timer <= 0) {
-                        platform.active = false;
-                        setTimeout(() => {
-                            platform.active = true;
-                            platform.color1 = platform.originalColor1;
-                            platform.color2 = platform.originalColor2;
-                        }, Math.floor(platform.reappearTime * 10 / gameSpeedFactor)); // Scale reappear time
-                    }
-                }
-            }
-        }
-        
-        function updateEnemies() {
-            for (const enemy of enemies) {
-                const platform = platforms[enemy.platformIndex];
-                
-                enemy.x += enemy.direction * enemy.speed;
-
-                const patrolMargin = 10;
-                if (enemy.x - enemy.size < platform.x + patrolMargin || enemy.x + enemy.size > platform.x + platform.width - patrolMargin) {
-                    enemy.direction *= -1;
-                    if (enemy.x - enemy.size < platform.x + patrolMargin) enemy.x = platform.x + patrolMargin + enemy.size;
-                    if (enemy.x + enemy.size > platform.x + platform.width - patrolMargin) enemy.x = platform.x + platform.width - patrolMargin - enemy.size;
-                }
-                
-                enemy.y = platform.y - enemy.size - 2;
-            }
-        }
-        
-        function updateStars() {
-            let allCollected = true;
-            for (let i = 0; i < stars.length; i++) {
-                const star = stars[i];
-                if (!star.collected) {
-                    allCollected = false;
-                    const dx = player.x - star.x;
-                    const dy = player.y - star.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < player.radius + star.radius * star.scale * 0.7) {
-                        star.collected = true;
-                        score += 1;
-                        playStarSound();
-                        (function animateStar(starIndex, scaleValue) {
-                            if (!stars[starIndex] || stars[starIndex].collected !== true) return;
-                            stars[starIndex].scale = scaleValue;
-                            if (scaleValue > 0.1) {
-                                requestAnimationFrame(() => animateStar(starIndex, scaleValue - 0.1));
-                            }
-                        })(i, 1);
-                    }
-                }
-            }
-            // Create exit platform only when all stars are collected and it doesn't already exist
-            if (allCollected && !exitPlatform) {
-                exitPlatform = {
-                    x: TARGET_CANVAS_WIDTH - 120, 
-                    y: EFFECTIVE_EXIT_PLATFORM_Y, // Positioned based on constant
-                    width: 100,
-                    height: EXIT_PLATFORM_HEIGHT, // Height based on constant
-                    color1: '#006400',
-                    color2: '#004d00',
-                    static: true,
-                    type: 'normal'
-                };
-            }
-        }
-
-        function updatePowerUps() {
-            for (let i = powerUps.length - 1; i >= 0; i--) {
-                const powerUp = powerUps[i];
-                powerUp.update(); 
-
-                if (powerUp.collected) continue;
-
-                const dx = player.x - powerUp.x;
-                const dy = player.y - powerUp.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < player.radius + powerUp.radius) {
-                    powerUp.collected = true;
-                    playPowerUpSound();
-                    score += 2; 
-
-                    switch (powerUp.type) {
-                        case 'invincible':
-                            player.invincible = true;
-                            player.invincibleTimer = Math.floor(300 / gameSpeedFactor); 
-                            player.canTakeDamage = false; 
-                            clearTimeout(player.damageCooldownTimeout); 
-                            break;
-                        case 'speed':
-                            player.speedBoost = true;
-                            player.speedBoostTimer = Math.floor(300 / gameSpeedFactor); 
-                            break;
-                    }
-                    powerUps.splice(i, 1);
-                }
-            }
-        }
-
-        function updateParticles() {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const particle = particles[i];
-                particle.update();
-                if (particle.lifetime <= 0 || particle.size <= 0.5) {
-                    particles.splice(i, 1);
-                }
-            }
-        }
-
-        // NEW: Function to update background particles
-        function updateBackgroundParticles() {
-            for (const particle of backgroundParticles) {
-                particle.update();
-            }
-        }
-        
-        function playerDie(isFallOrDeadlyPlatform) {
-            if (!player.canTakeDamage) return;
-            
-            player.lives--;
-            player.canTakeDamage = false;
-            clearTimeout(player.damageCooldownTimeout); 
-            player.invincible = false; 
-            player.invincibleTimer = 0;
-            player.speedBoost = false; // Reset speed boost
-            player.speedBoostTimer = 0;
-            
-            player.damageCooldownTimeout = setTimeout(() => {
-                player.canTakeDamage = true;
-            }, Math.floor(1000 / gameSpeedFactor)); // Scale damage cooldown time
-            
-            if (player.lives <= 0) {
-                gameOverFinalScore = score;
-                if (gameOverFinalScore > highScore) {
-                    highScore = gameOverFinalScore;
-                    localStorage.setItem('platformGameHighScore', highScore);
-                }
-                
-                playerCanMove = false;
-                gameState = 'transitioning';
-                transitionCallback = () => {
-                    gameState = 'gameOver';
-                    playGameOverSound();
-                };
-
-            } else {
-                if (isFallOrDeadlyPlatform) {
-                    playLifeLostSound();
-                } 
-                
-                playerCanMove = false;
-                gameState = 'transitioning';
-                transitionCallback = () => {
-                    player.x = 50;
-                    player.y = platforms[0].y - player.radius; 
-                    player.vx = 0;
-                    player.vy = 0; 
-                    player.scale = 1;
-                    player.onGround = true; 
-                };
-            }
-        }
-        
-        function checkExitPlatform() {
-            if (exitPlatform) { // Only check if exit platform exists
-                if (player.y + player.radius > exitPlatform.y && 
-                    player.y - player.radius < exitPlatform.y + exitPlatform.height &&
-                    player.x + player.radius > exitPlatform.x && 
-                    player.x - player.radius < exitPlatform.x + exitPlatform.width) {
-                    
-                    if (gameState === 'playing') {
-                        score += 5;
-                        playLevelCompleteSound();
-                        
-                        playerCanMove = false;
-                        gameState = 'transitioning';
-                        transitionCallback = () => {
-                            level++;
-                            platformBaseSpeed += 0.05; // Base speed increase, not scaled here
-                            initLevel();
-                        };
-                    }
-                }
-            }
-        }
-        
-        function drawBackground() {
-            const gradient = ctx.createLinearGradient(0, 0, 0, TARGET_CANVAS_HEIGHT);
-            backgroundColors.forEach((color, index) => {
-                gradient.addColorStop(index / (backgroundColors.length - 1), color);
+            dynamicPlatformConfigs.push({
+                x, y, width, height, color1: pColor1, color2: pColor2,
+                static: isStatic, direction, speed: platformBaseSpeed * platformSpeedFactor * gameSpeedFactor,
+                type: currentType, originalColor1: pColor1, originalColor2: pColor2,
+                active: true, timer: Math.floor(60 / gameSpeedFactor), reappearTime: Math.floor(120 / gameSpeedFactor)
             });
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
+            currentPlatformYForGeneration = y + height;
         }
 
-        // NEW: Function to draw background particles
-        function drawBackgroundParticles() {
-            for (const particle of backgroundParticles) {
-                particle.draw(ctx);
-            }
-        }
-
-        function drawGameElements() {
-            drawBackground();
-            drawBackgroundParticles(); // NEW: Draw background particles BEFORE other elements
+        // Add remaining special platforms if they weren't all used due to random chance
+        while (specialPlatformsToGenerate.length > 0) {
+            const currentType = specialPlatformsToGenerate.shift();
+            let pColor1 = '#00008B'; let pColor2 = '#000066';
+            let platformSpeedFactor = (1.0 + Math.random() * 0.5); let isStatic = false;
             
-            for (const platform of platforms) {
-                if (platform.active) {
-                    drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
+            switch (currentType) {
+                case 'disappearing': pColor1 = '#800080'; pColor2 = '#4B0082'; isStatic = false; break;
+                case 'bouncy': pColor1 = '#32CD32'; pColor2 = '#228B22'; isStatic = true; platformSpeedFactor = 0; break;
+                case 'conveyor': pColor1 = '#A9A9A9'; pColor2 = '#696969'; isStatic = false; break;
+            }
+
+            const width = 70 + Math.random() * 150;
+            const height = 15;
+
+            let minYForThisPlatform = currentPlatformYForGeneration + MIN_PLATFORM_VERTICAL_GAP;
+            let maxYForThisPlatform = currentPlatformYForGeneration + MAX_PLATFORM_VERTICAL_GAP; // Max gap constraint applied here
+            maxYForThisPlatform = Math.min(maxYForThisPlatform, lowestPlatformTopY - height);
+
+            if (minYForThisPlatform > maxYForThisPlatform) {
+                minYForThisPlatform = maxYForThisPlatform;
+                if (minYForThisPlatform < currentPlatformYForGeneration + height) {
+                    minYForThisPlatform = currentPlatformYForGeneration + height;
                 }
             }
-            
-            if (exitPlatform) { // Only draw if exit platform exists
-                drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
+            let y = Math.random() * (maxYForThisPlatform - minYForThisPlatform) + minYForThisPlatform;
+            y = Math.max(y, highestPlatformBottomY + MIN_PLATFORM_VERTICAL_GAP);
+
+            const x = Math.random() * (TARGET_CANVAS_WIDTH - width);
+
+            dynamicPlatformConfigs.push({
+                x, y, width, height, color1: pColor1, color2: pColor2,
+                static: isStatic, direction: Math.random() > 0.5 ? 1 : -1,
+                speed: platformBaseSpeed * platformSpeedFactor * gameSpeedFactor,
+                type: currentType, originalColor1: pColor1, originalColor2: pColor2, active: true,
+                timer: Math.floor(60 / gameSpeedFactor), reappearTime: Math.floor(120 / gameSpeedFactor)
+            });
+            currentPlatformYForGeneration = y + height;
+        }
+
+        // Sort platforms by Y and insert them before the deadly platform
+        dynamicPlatformConfigs.sort((a, b) => a.y - b.y);
+        platforms.splice(platforms.length - 1, 0, ...dynamicPlatformConfigs);
+
+        // Find the lowest moving platform's bottom Y coordinate for star placement constraint
+        let lowestMovingPlatformBottomY = 0;
+        for (const p of platforms) {
+            // Only consider platforms that are actually moving and not special types that might imply being stationary/disappearing
+            if (!p.static && p.type !== 'disappearing' && p.type !== 'bouncy') {
+                lowestMovingPlatformBottomY = Math.max(lowestMovingPlatformBottomY, p.y + p.height);
+            }
+        }
+        // If no moving platforms (e.g., Level 1 or all static/special), set a safe default (above the exit platform).
+        // This is crucial to prevent stars from spawning below unreachable areas.
+        if (lowestMovingPlatformBottomY === 0 || lowestMovingPlatformBottomY > EFFECTIVE_EXIT_PLATFORM_Y) {
+            lowestMovingPlatformBottomY = EFFECTIVE_EXIT_PLATFORM_Y; 
+        }
+
+        // Populate enemies and power-ups on platforms
+        for (let i = 1; i < platforms.length - 1; i++) { // Exclude first (start) and last (deadly) platforms
+            const platform = platforms[i];
+            if (Math.random() < (0.3 + (level * 0.05)) && platform.type !== 'bouncy') {
+                enemies.push({
+                    x: platform.x + platform.width / 2, y: platform.y - 15, size: 12,
+                    platformIndex: i, direction: Math.random() > 0.5 ? 1 : -1,
+                    speed: platformBaseSpeed * (0.5 + Math.random() * 0.5) * gameSpeedFactor // Scale enemy speed
+                });
+            }
+            if (Math.random() < 0.08 && platform.type !== 'bouncy' && platform.type !== 'disappearing') {
+                const puType = Math.random() < 0.5 ? 'invincible' : 'speed';
+                powerUps.push(new PowerUp(platform.x + platform.width / 2, platform.y - 20, puType));
+            }
+        }
+        
+        // Star Generation (Revised)
+        const starRadius = 15;
+        const numStars = 5 + level;
+        for (let i = 0; i < numStars; i++) {
+            let valid = false;
+            let starX, starY;
+            let attempts = 0;
+            const maxStarPlacementAttempts = 100;
+
+            while (!valid && attempts < maxStarPlacementAttempts) {
+                attempts++;
                 
-                ctx.fillStyle = 'white';
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = 3;
-                ctx.font = 'bold 18px Arial';
-                ctx.textAlign = 'center';
-                ctx.strokeText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
-                ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
-            }
-            
-            for (const star of stars) {
-                if (!star.collected) {
-                    drawStarWithGradient(star.x, star.y, star.radius, 5, '#FFFF00', '#FFD700', star.scale);
+                // Pick a random platform to base the star's Y position on
+                // Exclude start and deadly platforms from being the primary base for stars
+                const platformCandidates = platforms.slice(1, platforms.length - 1);
+                if (platformCandidates.length === 0) { // Fallback, should not happen with proper platform generation
+                    platformCandidates.push(platforms[0]); 
                 }
-            }
+                const basePlatform = platformCandidates[Math.floor(Math.random() * platformCandidates.length)];
 
-            for (const powerUp of powerUps) {
-                powerUp.draw(ctx);
-            }
-            
-            for (const enemy of enemies) {
-                drawTriangleWithGradient(enemy.x, enemy.y, enemy.size, '#FF0000', '#8B0000');
-            }
-            
-            let playerColor1 = '#FFFFFF';
-            let playerColor2 = '#87CEEB';
-            if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 5) % 2 === 0) { 
-                playerColor1 = '#FFD700'; 
-                playerColor2 = '#FF4500'; 
-            }
-            drawCircleWithGradient(player.x, player.y, player.radius, playerColor1, playerColor2, player.scale);
+                // Star Y must be within jump height relative to this platform
+                const starYminRelative = basePlatform.y - MAX_JUMP_HEIGHT;
+                const starYmaxRelative = basePlatform.y + basePlatform.height + MAX_JUMP_HEIGHT;
 
-            for (const particle of particles) {
-                particle.draw(ctx);
-            }
-            
-            ctx.fillStyle = 'white';
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 3;
-            ctx.font = 'bold 20px Arial'; 
-            ctx.textAlign = 'left';
+                starX = 20 + Math.random() * (TARGET_CANVAS_WIDTH - 40);
+                starY = Math.random() * (starYmaxRelative - starYminRelative) + starYminRelative;
 
-            // Lives in numbers, score and level in one line
-            const infoText = `Score: ${score} | Level: ${level} | Lives: ${player.lives}`;
-            ctx.font = 'bold 18px Arial'; // Slightly smaller font to fit on one line
-            ctx.strokeText(infoText, 10, 30);
-            ctx.fillText(infoText, 10, 30);
-        }
+                // Apply global Y constraints for stars
+                starY = Math.max(starY, player.radius + 10); // Not too high (above player starting Y)
+                // Ensure stars are above the lowest moving platform's bottom edge, and above the exit platform area.
+                starY = Math.min(starY, lowestMovingPlatformBottomY - starRadius - 5); 
+                starY = Math.min(starY, EFFECTIVE_EXIT_PLATFORM_Y - starRadius - 5);
 
-        function drawScreenMessage(title, message, titleColor, messageColor, titleSize, messageSize) {
-            ctx.fillStyle = titleColor;
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 4;
-            ctx.font = `bold ${titleSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.strokeText(title, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 - 20);
-            ctx.fillText(title, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 - 20);
-
-            if (message) {
-                ctx.fillStyle = messageColor;
-                ctx.font = `bold ${messageSize}px Arial`;
-                ctx.lineWidth = 3;
-                ctx.strokeText(message, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 20);
-                ctx.fillText(message, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 20);
-            }
-        }
-
-        function drawStartScreen() {
-            drawBackground();
-            drawScreenMessage("REACH FOR THE STARS", "Press JUMP to Start", 'cyan', 'white', 20, 15); // Changed 40 to 20, 25 to 15
-            ctx.font = 'bold 12px Arial'; // Smaller font for instructions
-            ctx.lineWidth = 2;
-            ctx.fillStyle = 'white';
-            ctx.strokeStyle = 'black';
-            ctx.strokeText("Controls: Arrow Keys to Move, SPACE to Jump", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 50);
-            ctx.fillText("Controls: Arrow Keys to Move, SPACE to Jump", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 50);
-            ctx.strokeText("Collect all stars to find the EXIT!", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 70);
-            ctx.fillText("Collect all stars to find the EXIT!", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 70);
-            ctx.strokeText("P / ESC: Pause Game", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 90);
-            ctx.fillText("P / ESC: Pause Game", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 90);
-        }
-
-        function drawPausedScreen() {
-            drawGameElements(); 
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; 
-            ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
-            drawScreenMessage("PAUSED", "Press P or ESC to Resume", 'yellow', 'white', 40, 25);
-        }
-
-        function drawGameOverScreen() {
-            drawBackground();
-            drawScreenMessage("GAME OVER", `Final Score: ${gameOverFinalScore}`, 'red', 'white', 40, 25);
-            
-            ctx.fillStyle = 'white';
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 3;
-            ctx.font = 'bold 25px Arial';
-            ctx.textAlign = 'center';
-            ctx.strokeText(`High Score: ${highScore}`, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 60);
-            ctx.fillText(`High Score: ${highScore}`, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 60);
-
-            ctx.font = 'bold 20px Arial';
-            ctx.strokeText('Press JUMP to Restart', TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 100);
-            ctx.fillText('Press JUMP to Restart', TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 100);
-        }
-
-        function drawTransitionOverlay() {
-            ctx.fillStyle = `rgba(0, 0, 0, ${transitionAlpha})`;
-            ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
-
-            if (gameState === 'start') {
-                drawStartScreen();
-            } else if (gameState === 'playing' || gameState === 'paused' || gameState === 'levelComplete' || gameState === 'transitioning') {
-                drawGameElements();
-                if (gameState === 'paused') {
-                    drawPausedScreen();
+                // Validate placement (no overlaps)
+                valid = true;
+                // Check collision with enemies
+                for (const enemy of enemies) {
+                    const dx = starX - enemy.x; const dy = starY - enemy.y;
+                    if (Math.sqrt(dx * dx + dy * dy) < starRadius + enemy.size * 0.7) { valid = false; break; }
                 }
-            } else if (gameState === 'gameOver') {
-                drawGameOverScreen();
+                if (!valid) continue;
+                // Check collision with platforms
+                for (const platform of platforms) {
+                    if (starX + starRadius > platform.x && starX - starRadius < platform.x + platform.width &&
+                        starY + starRadius > platform.y && starY - starRadius < platform.y + platform.height) {
+                        valid = false;
+                        break;
+                    }
+                }
+                if (!valid) continue;
+                // Check collision with power-ups
+                for (const pu of powerUps) {
+                    const dx = starX - pu.x; const dy = starY - pu.y;
+                    if (Math.sqrt(dx * dx + dy * dy) < starRadius + pu.radius) { valid = false; break; }
+                }
+                if (!valid) continue;
+                
+                // Final check: is the star actually reachable from *any* platform?
+                // This is a crucial check for playability based on current jump height.
+                let reachableFromAnyPlatform = false;
+                for (const p of platforms) {
+                    // Rough horizontal check (within player's ability to move)
+                    // A buffer of player.radius * 2 is added to account for player's width when jumping between platforms.
+                    if (starX + player.radius * 2 > p.x && starX - player.radius * 2 < p.x + p.width) {
+                        const verticalDistToTop = p.y - (starY + player.radius); // How far up from star top to platform top
+                        const verticalDistToBottom = (starY - player.radius) - (p.y + p.height); // How far down from star bottom to platform bottom
+
+                        // Can jump up to it OR can fall down to it
+                        if ( (verticalDistToTop >= -player.radius && verticalDistToTop <= MAX_JUMP_HEIGHT + player.radius) || // Jump from platform to star
+                             (verticalDistToBottom >= -player.radius && verticalDistToBottom <= MAX_JUMP_HEIGHT + player.radius) ) { // Jump from star to platform OR fall from platform to star
+                            reachableFromAnyPlatform = true;
+                            break;
+                        }
+                    }
+                }
+                if (!reachableFromAnyPlatform) { valid = false; }
             }
-            
-            if (gameState === 'transitioning') {
-                drawTransitionOverlay();
+            if (valid) {
+                stars.push({ x: starX, y: starY, radius: starRadius, scale: 1, collected: false });
             }
         }
         
-        function resetGame() {
-            player.lives = 3;
-            score = 0;
-            level = 1;
-            platformBaseSpeed = 0.7; // Reset to base value
+        // Player reset position
+        player.x = 50;
+        player.y = platforms[0].y - player.radius; // Snap directly to platform top
+        player.vx = 0;
+        player.vy = 0; 
+        player.scale = 1;
+        player.onGround = true; 
+        player.canTakeDamage = true;
+        clearTimeout(player.damageCooldownTimeout);
+        player.invincible = false;
+        player.invincibleTimer = 0;
+        player.speedBoost = false;
+        player.speedBoostTimer = 0;
+    }
+    
+    function update() {
+        switch (gameState) {
+            case 'start':
+                if (keys[' ']) {
+                    playerCanMove = true;
+                    gameState = 'playing';
+                    keys[' '] = false;
+                    startMusic();
+                }
+                break;
+            case 'playing':
+                if (keys['p'] || keys['Escape']) {
+                    gameState = 'paused';
+                    keys['p'] = false; keys['Escape'] = false;
+                    if (bgMusic) bgMusic.pause();
+                    playerCanMove = false;
+                }
+                updatePlayer();
+                updatePlatforms();
+                updateEnemies();
+                updateStars();
+                updatePowerUps(); 
+                updateParticles(); 
+                updateBackgroundParticles(); // NEW: Update background particles
+                checkExitPlatform();
+                break;
+            case 'paused':
+                if (keys['p'] || keys['Escape']) {
+                    gameState = 'playing';
+                    keys['p'] = false; keys['Escape'] = false;
+                    if (bgMusic) startMusic();
+                    playerCanMove = true;
+                }
+                break;
+            case 'transitioning':
+                transitionAlpha += transitionSpeed;
+                if (transitionAlpha >= 1) {
+                    transitionAlpha = 1;
+                    if (transitionCallback) transitionCallback();
+                    transitionSpeed *= -1;
+                } else if (transitionAlpha <= 0) {
+                    transitionAlpha = 0;
+                    transitionSpeed = Math.abs(transitionSpeed);
+                    gameState = 'playing';
+                    playerCanMove = true;
+                }
+                break;
+            case 'gameOver':
+                if (keys[' ']) {
+                    resetGame();
+                    keys[' '] = false;
+                }
+                break;
+        }
+    }
+    
+    function updatePlayer() {
+        if (!playerCanMove) {
+            player.vx = 0;
+            return;
+        }
+
+        let currentSpeed = player.baseSpeed;
+        if (player.speedBoost) {
+            currentSpeed *= 2.0; 
+            player.speedBoostTimer--;
+            if (player.speedBoostTimer <= 0) {
+                player.speedBoost = false;
+            }
+        }
+
+        if (keys.ArrowLeft) player.vx = Math.max(player.vx - (0.2 * gameSpeedFactor), -currentSpeed);
+        else if (keys.ArrowRight) player.vx = Math.min(player.vx + (0.2 * gameSpeedFactor), currentSpeed);
+        else player.vx *= 0.9;
+        
+        player.x += player.vx;
+        
+        if (keys[' '] && player.onGround) {
+            player.vy = player.baseJump;
+            player.onGround = false;
+            playJumpSound();
+        }
+        
+        player.vy += GRAVITY; // Use scaled GRAVITY
+        player.y += player.vy;
+        
+        if (player.x < player.radius) {
+            player.x = player.radius;
+            player.vx = 0;
+        }
+        if (player.x > TARGET_CANVAS_WIDTH - player.radius) {
+            player.x = TARGET_CANVAS_WIDTH - player.radius;
+            player.vx = 0;
+        }
+        
+        let landedOnPlatformThisFrame = false;
+        for (const platform of platforms) {
+            if (!platform.active) continue; 
+
+            if (player.vy > 0 && 
+                player.y + player.radius > platform.y && 
+                player.y - player.radius < platform.y + platform.height &&
+                player.x + player.radius > platform.x && 
+                player.x - player.radius < platform.x + platform.width) {
+                
+                if (player.y - player.vy + player.radius <= platform.y) { 
+                    player.y = platform.y - player.radius;
+                    
+                    if (!player.onGround) {
+                         if (platform.type === 'bouncy') {
+                            player.vy = player.baseJump * 1.8; 
+                         } else {
+                            player.vy = -player.vy * 0.2; 
+                         }
+                         playLandSound();
+                    } else {
+                        player.vy = 0;
+                    }
+                    player.onGround = true;
+                    landedOnPlatformThisFrame = true;
+                    
+                    if (player.scale === 1) {
+                        player.scale = 0.9;
+                        setTimeout(() => player.scale = 1, Math.floor(100 / gameSpeedFactor)); // Scale animation time
+                    }
+                    
+                    if (!platform.static) {
+                        player.x += platform.direction * platform.speed;
+                    }
+                    if (platform.type === 'conveyor') {
+                         player.x += platform.direction * platform.speed * 1.5; 
+                    }
+
+                    if (platform.type === 'disappearing') {
+                        platform.timer = Math.floor(60 / gameSpeedFactor); 
+                        platform.color1 = 'rgba(128,0,128,0.5)'; 
+                        platform.color2 = 'rgba(75,0,130,0.5)';
+                    }
+                    
+                    if (platform.deadly && !player.invincible && player.canTakeDamage) {
+                        playerDie(true);
+                    }
+                }
+            }
+        }
+        if (!landedOnPlatformThisFrame && player.onGround && player.vy > 0) {
+             player.onGround = false;
+        }
+
+        for (const enemy of enemies) {
+            const dx = player.x - enemy.x;
+            const dy = player.y - enemy.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
             
-            initLevel(); 
+            if (distance < player.radius + enemy.size * 0.7 && !player.invincible && player.canTakeDamage) {
+                playerDie(false);
+                player.vx = dx > 0 ? 5 * gameSpeedFactor : -5 * gameSpeedFactor;
+                player.vy = -3 * gameSpeedFactor;
+            }
+        }
+        
+        if (player.y > TARGET_CANVAS_HEIGHT + 50) {
+            if (!player.invincible && player.canTakeDamage) {
+                playerDie(true);
+            }
+        }
+
+        if (player.invincibleTimer > 0) {
+            player.invincibleTimer--;
+            if (player.invincibleTimer <= 0) {
+                player.invincible = false;
+                player.canTakeDamage = true; 
+                clearTimeout(player.damageCooldownTimeout); 
+            }
+        }
+    }
+    
+    function updatePlatforms() {
+        for (let i = 0; i < platforms.length; i++) {
+            const platform = platforms[i];
+            if (!platform.static) {
+                platform.x += platform.direction * platform.speed;
+                
+                if (platform.x <= 0 || platform.x + platform.width >= TARGET_CANVAS_WIDTH) {
+                    platform.direction *= -1;
+                    if (platform.x < 0) platform.x = 0;
+                    if (platform.x + platform.width > TARGET_CANVAS_WIDTH) platform.x = TARGET_CANVAS_WIDTH - platform.width;
+                }
+            }
+            if (platform.type === 'disappearing' && platform.timer > 0) {
+                platform.timer--;
+                if (platform.timer <= 0) {
+                    platform.active = false;
+                    setTimeout(() => {
+                        platform.active = true;
+                        platform.color1 = platform.originalColor1;
+                        platform.color2 = platform.originalColor2;
+                    }, Math.floor(platform.reappearTime * 10 / gameSpeedFactor)); // Scale reappear time
+                }
+            }
+        }
+    }
+    
+    function updateEnemies() {
+        for (const enemy of enemies) {
+            const platform = platforms[enemy.platformIndex];
             
-            gameState = 'playing';
+            enemy.x += enemy.direction * enemy.speed;
+
+            const patrolMargin = 10;
+            if (enemy.x - enemy.size < platform.x + patrolMargin || enemy.x + enemy.size > platform.x + platform.width - patrolMargin) {
+                enemy.direction *= -1;
+                if (enemy.x - enemy.size < platform.x + patrolMargin) enemy.x = platform.x + patrolMargin + enemy.size;
+                if (enemy.x + enemy.size > platform.x + platform.width - patrolMargin) enemy.x = platform.x + platform.width - patrolMargin - enemy.size;
+            }
+            
+            enemy.y = platform.y - enemy.size - 2;
+        }
+    }
+    
+    function updateStars() {
+        let allCollected = true;
+        for (let i = 0; i < stars.length; i++) {
+            const star = stars[i];
+            if (!star.collected) {
+                allCollected = false;
+                const dx = player.x - star.x;
+                const dy = player.y - star.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < player.radius + star.radius * star.scale * 0.7) {
+                    star.collected = true;
+                    score += 1;
+                    playStarSound();
+                    (function animateStar(starIndex, scaleValue) {
+                        if (!stars[starIndex] || stars[starIndex].collected !== true) return;
+                        stars[starIndex].scale = scaleValue;
+                        if (scaleValue > 0.1) {
+                            requestAnimationFrame(() => animateStar(starIndex, scaleValue - 0.1));
+                        }
+                    })(i, 1);
+                }
+            }
+        }
+        // Create exit platform only when all stars are collected and it doesn't already exist
+        if (allCollected && !exitPlatform) {
+            exitPlatform = {
+                x: TARGET_CANVAS_WIDTH - 120, 
+                y: EFFECTIVE_EXIT_PLATFORM_Y, // Positioned based on constant
+                width: 100,
+                height: EXIT_PLATFORM_HEIGHT, // Height based on constant
+                color1: '#006400',
+                color2: '#004d00',
+                static: true,
+                type: 'normal'
+            };
+        }
+    }
+
+    function updatePowerUps() {
+        for (let i = powerUps.length - 1; i >= 0; i--) {
+            const powerUp = powerUps[i];
+            powerUp.update(); 
+
+            if (powerUp.collected) continue;
+
+            const dx = player.x - powerUp.x;
+            const dy = player.y - powerUp.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < player.radius + powerUp.radius) {
+                powerUp.collected = true;
+                playPowerUpSound();
+                score += 2; 
+
+                switch (powerUp.type) {
+                    case 'invincible':
+                        player.invincible = true;
+                        player.invincibleTimer = Math.floor(300 / gameSpeedFactor); 
+                        player.canTakeDamage = false; 
+                        clearTimeout(player.damageCooldownTimeout); 
+                        break;
+                    case 'speed':
+                        player.speedBoost = true;
+                        player.speedBoostTimer = Math.floor(300 / gameSpeedFactor); 
+                        break;
+                }
+                powerUps.splice(i, 1);
+            }
+        }
+    }
+
+    function updateParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const particle = particles[i];
+            particle.update();
+            if (particle.lifetime <= 0 || particle.size <= 0.5) {
+                particles.splice(i, 1);
+            }
+        }
+    }
+
+    // NEW: Function to update background particles
+    function updateBackgroundParticles() {
+        for (const particle of backgroundParticles) {
+            particle.update();
+        }
+    }
+    
+    function playerDie(isFallOrDeadlyPlatform) {
+        if (!player.canTakeDamage) return;
+        
+        player.lives--;
+        player.canTakeDamage = false;
+        clearTimeout(player.damageCooldownTimeout); 
+        player.invincible = false; 
+        player.invincibleTimer = 0;
+        player.speedBoost = false; // Reset speed boost
+        player.speedBoostTimer = 0;
+        
+        player.damageCooldownTimeout = setTimeout(() => {
             player.canTakeDamage = true;
-            clearTimeout(player.damageCooldownTimeout); 
-            player.invincible = false;
-            player.invincibleTimer = 0;
-            player.speedBoost = false;
-            player.speedBoostTimer = 0;
+        }, Math.floor(1000 / gameSpeedFactor)); // Scale damage cooldown time
+        
+        if (player.lives <= 0) {
+            gameOverFinalScore = score;
+            if (gameOverFinalScore > highScore) {
+                highScore = gameOverFinalScore;
+                localStorage.setItem('platformGameHighScore', highScore);
+            }
             
-            transitionAlpha = 0;
-            transitionSpeed = Math.abs(transitionSpeed);
-            transitionCallback = null;
-            playerCanMove = true;
+            playerCanMove = false;
+            gameState = 'transitioning';
+            transitionCallback = () => {
+                gameState = 'gameOver';
+                playGameOverSound();
+            };
 
-            particles = []; 
-            backgroundParticles = []; // Clear background particles on reset
-            startMusic(); 
+        } else {
+            if (isFallOrDeadlyPlatform) {
+                playLifeLostSound();
+            } 
+            
+            playerCanMove = false;
+            gameState = 'transitioning';
+            transitionCallback = () => {
+                player.x = 50;
+                player.y = platforms[0].y - player.radius; 
+                player.vx = 0;
+                player.vy = 0; 
+                player.scale = 1;
+                player.onGround = true; 
+            };
+        }
+    }
+    
+    function checkExitPlatform() {
+        if (exitPlatform) { // Only check if exit platform exists
+            if (player.y + player.radius > exitPlatform.y && 
+                player.y - player.radius < exitPlatform.y + exitPlatform.height &&
+                player.x + player.radius > exitPlatform.x && 
+                player.x - player.radius < exitPlatform.x + exitPlatform.width) {
+                
+                if (gameState === 'playing') {
+                    score += 5;
+                    playLevelCompleteSound();
+                    
+                    playerCanMove = false;
+                    gameState = 'transitioning';
+                    transitionCallback = () => {
+                        level++;
+                        platformBaseSpeed += 0.05; // Base speed increase, not scaled here
+                        initLevel();
+                    };
+                }
+            }
+        }
+    }
+    
+    function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, TARGET_CANVAS_HEIGHT);
+        backgroundColors.forEach((color, index) => {
+            gradient.addColorStop(index / (backgroundColors.length - 1), color);
+        });
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
+    }
+
+    // NEW: Function to draw background particles
+    function drawBackgroundParticles() {
+        for (const particle of backgroundParticles) {
+            particle.draw(ctx);
+        }
+    }
+
+    function drawGameElements() {
+        drawBackground();
+        drawBackgroundParticles(); // NEW: Draw background particles BEFORE other elements
+        
+        for (const platform of platforms) {
+            if (platform.active) {
+                drawRectWithGradient(platform.x, platform.y, platform.width, platform.height, platform.color1, platform.color2);
+            }
         }
         
-        function gameLoop() {
-            update();
-            draw();
-            requestAnimationFrame(gameLoop);
+        if (exitPlatform) { // Only draw if exit platform exists
+            drawRectWithGradient(exitPlatform.x, exitPlatform.y, exitPlatform.width, exitPlatform.height, exitPlatform.color1, exitPlatform.color2);
+            
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'center';
+            ctx.strokeText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
+            ctx.fillText('EXIT', exitPlatform.x + exitPlatform.width / 2, exitPlatform.y + exitPlatform.height / 2 + 7);
         }
         
-        initLevel();
-        gameLoop();
-    </script>
+        for (const star of stars) {
+            if (!star.collected) {
+                drawStarWithGradient(star.x, star.y, star.radius, 5, '#FFFF00', '#FFD700', star.scale);
+            }
+        }
+
+        for (const powerUp of powerUps) {
+            powerUp.draw(ctx);
+        }
+        
+        for (const enemy of enemies) {
+            drawTriangleWithGradient(enemy.x, enemy.y, enemy.size, '#FF0000', '#8B0000');
+        }
+        
+        let playerColor1 = '#FFFFFF';
+        let playerColor2 = '#87CEEB';
+        if (player.invincibleTimer > 0 && Math.floor(player.invincibleTimer / 5) % 2 === 0) { 
+            playerColor1 = '#FFD700'; 
+            playerColor2 = '#FF4500'; 
+        }
+        drawCircleWithGradient(player.x, player.y, player.radius, playerColor1, playerColor2, player.scale);
+
+        for (const particle of particles) {
+            particle.draw(ctx);
+        }
+        
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        ctx.font = 'bold 20px Arial'; 
+        ctx.textAlign = 'left';
+
+        // Lives in numbers, score and level in one line
+        const infoText = `Score: ${score} | Level: ${level} | Lives: ${player.lives}`;
+        ctx.font = 'bold 18px Arial'; // Slightly smaller font to fit on one line
+        ctx.strokeText(infoText, 10, 30);
+        ctx.fillText(infoText, 10, 30);
+    }
+
+    function drawScreenMessage(title, message, titleColor, messageColor, titleSize, messageSize) {
+        ctx.fillStyle = titleColor;
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 4;
+        ctx.font = `bold ${titleSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.strokeText(title, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 - 20);
+        ctx.fillText(title, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 - 20);
+
+        if (message) {
+            ctx.fillStyle = messageColor;
+            ctx.font = `bold ${messageSize}px Arial`;
+            ctx.lineWidth = 3;
+            ctx.strokeText(message, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 20);
+            ctx.fillText(message, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 20);
+        }
+    }
+
+    function drawStartScreen() {
+        drawBackground();
+        drawScreenMessage("REACH FOR THE STARS", "Press JUMP to Start", 'cyan', 'white', 20, 15); // Changed 40 to 20, 25 to 15
+        ctx.font = 'bold 12px Arial'; // Smaller font for instructions
+        ctx.lineWidth = 2;
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'black';
+        ctx.strokeText("Controls: Arrow Keys to Move, SPACE to Jump", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 50);
+        ctx.fillText("Controls: Arrow Keys to Move, SPACE to Jump", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 50);
+        ctx.strokeText("Collect all stars to find the EXIT!", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 70);
+        ctx.fillText("Collect all stars to find the EXIT!", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 70);
+        ctx.strokeText("P / ESC: Pause Game", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 90);
+        ctx.fillText("P / ESC: Pause Game", TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 90);
+    }
+
+    function drawPausedScreen() {
+        drawGameElements(); 
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; 
+        ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
+        drawScreenMessage("PAUSED", "Press P or ESC to Resume", 'yellow', 'white', 40, 25);
+    }
+
+    function drawGameOverScreen() {
+        drawBackground();
+        drawScreenMessage("GAME OVER", `Final Score: ${gameOverFinalScore}`, 'red', 'white', 40, 25);
+        
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        ctx.font = 'bold 25px Arial';
+        ctx.textAlign = 'center';
+        ctx.strokeText(`High Score: ${highScore}`, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 60);
+        ctx.fillText(`High Score: ${highScore}`, TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 60);
+
+        ctx.font = 'bold 20px Arial';
+        ctx.strokeText('Press JUMP to Restart', TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 100);
+        ctx.fillText('Press JUMP to Restart', TARGET_CANVAS_WIDTH / 2, TARGET_CANVAS_HEIGHT / 2 + 100);
+    }
+
+    function drawTransitionOverlay() {
+        ctx.fillStyle = `rgba(0, 0, 0, ${transitionAlpha})`;
+        ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
+
+        if (gameState === 'start') {
+            drawStartScreen();
+        } else if (gameState === 'playing' || gameState === 'paused' || gameState === 'levelComplete' || gameState === 'transitioning') {
+            drawGameElements();
+            if (gameState === 'paused') {
+                drawPausedScreen();
+            }
+        } else if (gameState === 'gameOver') {
+            drawGameOverScreen();
+        }
+        
+        if (gameState === 'transitioning') {
+            drawTransitionOverlay();
+        }
+    }
+    
+    function resetGame() {
+        player.lives = 3;
+        score = 0;
+        level = 1;
+        platformBaseSpeed = 0.7; // Reset to base value
+        
+        initLevel(); 
+        
+        gameState = 'playing';
+        player.canTakeDamage = true;
+        clearTimeout(player.damageCooldownTimeout); 
+        player.invincible = false;
+        player.invincibleTimer = 0;
+        player.speedBoost = false;
+        player.speedBoostTimer = 0;
+        
+        transitionAlpha = 0;
+        transitionSpeed = Math.abs(transitionSpeed);
+        transitionCallback = null;
+        playerCanMove = true;
+
+        particles = []; 
+        backgroundParticles = []; // Clear background particles on reset
+        startMusic(); 
+    }
+    
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+    
+    initLevel();
+    gameLoop();
+</script>
 </body>
 </html>

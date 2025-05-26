@@ -152,12 +152,12 @@
         // --- Game Speed Control ---
         const isAndroid = /Android/i.test(navigator.userAgent);
         // Original: const gameSpeedFactor = isAndroid ? 0.5 : 1.0; // Make Android much slower
-        const gameSpeedFactor = 0.4; // MODIFIED: Set a universal game speed factor to make it slower for all users
+        const gameSpeedFactor = 0.35;
 
         // --- Physics Constants (Scaled by gameSpeedFactor) ---
-        const GRAVITY = 0.2 * gameSpeedFactor; //0.3
-        const PLAYER_BASE_SPEED = 4 * gameSpeedFactor;
-        const PLAYER_BASE_JUMP = -9 * gameSpeedFactor; // Jump velocity is negative (upwards)
+        const GRAVITY = 0.15 * gameSpeedFactor; //0.3
+        const PLAYER_BASE_SPEED = 3 * gameSpeedFactor;
+        const PLAYER_BASE_JUMP = -11 * gameSpeedFactor; // Jump velocity is negative (upwards)
 
         // Derived constants for platform/star generation
         // MAX_JUMP_HEIGHT formula: h = v^2 / (2g)
@@ -450,8 +450,8 @@
                 this.y = y;
                 this.size = 2 + Math.random() * 2; // Size 2-4
                 this.baseAlpha = 0.5 + Math.random() * 0.5; // Base transparency
-                this.alpha = 0; // Current transparency for blinking
-                this.flickerSpeed = 0.05 + Math.random() * 0.05;
+                this.alpha = 0.1; // Current transparency for blinking
+                this.flickerSpeed = 0.05 + Math.random() * 0.2;
                 this.flickerOffset = Math.random() * Math.PI * 2;
                 this.vx = (Math.random() - 0.5) * 0.5; // Slow horizontal drift
                 this.vy = (Math.random() - 0.5) * 0.5; // Slow vertical drift
@@ -761,7 +761,7 @@
             backgroundColors = [];
             switch (level % 5) {
                 case 1: // Night/Space
-                    backgroundColors = ['#0a1a40', '#4a4969', '#7f7f9c'];
+                    backgroundColors = ['#0a1a40', '#4a4969', '#8c7e9c']; //8C7E9C 7f7f9c
                     break;
                 case 2: // Autumn/Sunset
                     backgroundColors = ['#f9d423', '#ff4e50', '#fc913a'];

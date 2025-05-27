@@ -2,6 +2,8 @@
 
 A classic 2D platformer built with HTML, CSS, and JavaScript, where your goal is to collect all the stars and reach the exit to advance through increasingly challenging levels. Each level brings new obstacles, faster gameplay, and unique, dynamic background elements to enhance the immersive experience.
 
+Play: https://tintwotin.itch.io/reach-for-the-stars
+
 <div align="center">
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/reach_for_the_stars/master/index.html">PLAY</a><br><br>
   <img src="https://github.com/tin2tin/reach_for_the_stars/blob/main/stars.gif?raw=true" width="25%" />

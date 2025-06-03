@@ -1,4 +1,4 @@
-# Abyssal Ascent: A Platformer Adventure
+# Reach for the Stars: A Platformer Adventure
 
 A classic 2D platformer built with HTML, CSS, and JavaScript, where your goal is to collect all the stars and reach the exit to advance through increasingly challenging levels. Each level brings new obstacles, faster gameplay, and unique, dynamic background elements to enhance the immersive experience.
 
